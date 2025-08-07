@@ -2217,6 +2217,23 @@ document.getElementById('export_mode').addEventListener('click', function() {
     }
 });
 
+// Blender export button event handler
+document.getElementById('export_blender_mode').addEventListener('click', function() {
+    // Generate filename with current date
+    const now = new Date();
+    const dateStr = now.getFullYear() + '-' + 
+                   String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(now.getDate()).padStart(2, '0');
+    const filename = 'floorplan_blender_' + dateStr;
+    
+    // Call the Blender export function
+    if (exportForBlender(filename, 2.8, 0.08)) {
+        $('#boxinfo').html('Floorplan exported for Blender successfully!');
+    } else {
+        $('#boxinfo').html('Blender export failed. Please try again.');
+    }
+});
+
 // Import button event handler
 document.getElementById('import_mode').addEventListener('click', function() {
     // Show confirmation dialog before importing (will clear current work)

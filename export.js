@@ -948,3 +948,193 @@ function hideBackgroundImageTools() {
         console.error('Error hiding background image tools:', error);
     }
 }
+
+/**
+ * Export floorplan data in Blender-compatible format
+ * @param {string} filename - Optional filename (without extension)
+ * @param {number} wallHeight - Wall height in meters (default: 2.8)
+ * @param {number} wallThickness - Wall thickness in meters (default: 0.08)
+ */
+function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wallThickness = 0.08) {
+    try {
+        // Initialize the Blender export data structure
+        const blenderData = {
+            wall_height: wallHeight,
+            wall_thickness: wallThickness,
+            main: [],
+            walls: [],
+            doors: [],
+            windows: []
+        };
+
+        // First pass: collect all coordinates to calculate extents
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        // Helper function to update extents
+        function updateExtents(x, y) {
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+
+        // Calculate extents from rooms
+        for (let i = 0; i < ROOM.length; i++) {
+            const room = ROOM[i];
+            if (room.coords && room.coords.length > 0) {
+                for (let j = 0; j < room.coords.length; j++) {
+                    const coord = room.coords[j];
+                    const x = coord.x / 60;
+                    const y = coord.y / 60;
+                    updateExtents(x, y);
+                }
+            }
+        }
+
+        // Calculate extents from walls
+        for (let i = 0; i < WALLS.length; i++) {
+            const wall = WALLS[i];
+            if (wall.start && wall.end) {
+                updateExtents(wall.start.x / 60, wall.start.y / 60);
+                updateExtents(wall.end.x / 60, wall.end.y / 60);
+            }
+        }
+
+        // Calculate extents from objects (doors and windows)
+        for (let i = 0; i < OBJDATA.length; i++) {
+            const obj = OBJDATA[i];
+            if (obj.x !== undefined && obj.y !== undefined) {
+                let x = obj.x / 60;
+                let y = obj.y / 60;
+                
+                // Apply angle-based adjustments for extent calculation
+                if (obj.angle !== undefined) {
+                    const angle = obj.angle;
+                    if (angle === 90) {
+                        x += 0.1;
+                    } else if (angle === 270) {
+                        x -= 0.1;
+                    } else if (angle === 180) {
+                        y += 0.1;
+                    } else if (angle === 0) {
+                        y -= 0.1;
+                    }
+                }
+                
+                // Only include doors and windows in extent calculation
+                if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple' ||
+                    obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
+                    updateExtents(x, y);
+                }
+            }
+        }
+
+        // Calculate center offset
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        
+        console.log(`Floorplan extents: X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}]`);
+        console.log(`Center offset: [${centerX.toFixed(2)}, ${centerY.toFixed(2)}]`);
+
+        // Convert rooms to main polygons
+        // Each room becomes a polygon of [x, y] coordinates
+        for (let i = 0; i < ROOM.length; i++) {
+            const room = ROOM[i];
+            if (room.coords && room.coords.length > 0) {
+                const roomPolygon = [];
+                for (let j = 0; j < room.coords.length; j++) {
+                    const coord = room.coords[j];
+                    // Convert from editor coordinates to Blender coordinates and center around (0,0)
+                    // Scale down from pixels to meters (assuming 60 pixels = 1 meter based on grid)
+                    const x = parseFloat(((coord.x / 60) - centerX).toFixed(2));
+                    const y = parseFloat(((coord.y / 60) - centerY).toFixed(2));
+                    roomPolygon.push([x, y]);
+                }
+                if (roomPolygon.length > 0) {
+                    blenderData.main.push(roomPolygon);
+                }
+            }
+        }
+
+        // Convert walls to line segments
+        // Each wall becomes [[start.x, start.y], [end.x, end.y]]
+        for (let i = 0; i < WALLS.length; i++) {
+            const wall = WALLS[i];
+            if (wall.start && wall.end) {
+                const startX = parseFloat(((wall.start.x / 60) - centerX).toFixed(2));
+                const startY = parseFloat(((wall.start.y / 60) - centerY).toFixed(2));
+                const endX = parseFloat(((wall.end.x / 60) - centerX).toFixed(2));
+                const endY = parseFloat(((wall.end.y / 60) - centerY).toFixed(2));
+                
+                blenderData.walls.push([
+                    [startX, startY],
+                    [endX, endY]
+                ]);
+            }
+        }
+
+        // Convert objects (doors and windows) to position arrays
+        for (let i = 0; i < OBJDATA.length; i++) {
+            const obj = OBJDATA[i];
+            if (obj.x !== undefined && obj.y !== undefined) {
+                let x = parseFloat((obj.x / 60).toFixed(2));
+                let y = parseFloat((obj.y / 60).toFixed(2));
+                
+                // Adjust position based on angle property
+                if (obj.angle !== undefined) {
+                    const angle = obj.angle;
+                    if (angle === 90) {
+                        x += 0.1;
+                    } else if (angle === 270) {
+                        x -= 0.1;
+                    } else if (angle === 180) {
+                        y += 0.1;
+                    } else if (angle === 0) {
+                        y -= 0.1;
+                    }
+                    
+                    // Round to 2 decimal places after adjustment
+                    x = parseFloat(x.toFixed(2));
+                    y = parseFloat(y.toFixed(2));
+                }
+
+                // Apply center offset to position coordinates
+                x = parseFloat((x - centerX).toFixed(2));
+                y = parseFloat((y - centerY).toFixed(2));
+
+                // Categorize objects based on their type
+                if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple') {
+                    blenderData.doors.push([x, y]);
+                } else if (obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
+                    blenderData.windows.push([x, y]);
+                }
+            }
+        }
+
+        // Convert to JSON string with custom formatting for compact coordinate arrays
+        let jsonString = JSON.stringify(blenderData, null, '\t');
+        
+        // Post-process to make coordinate arrays more compact
+        // Replace multi-line coordinate arrays with single-line format
+        jsonString = jsonString.replace(/\[\s*\n\s*([\d.-]+),\s*\n\s*([\d.-]+)\s*\n\s*\]/g, '[$1, $2]');
+        
+        // Create and trigger download
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename + '.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        console.log('Blender export completed:', filename + '.json');
+        return true;
+        
+    } catch (error) {
+        console.error('Error exporting for Blender:', error);
+        return false;
+    }
+}
