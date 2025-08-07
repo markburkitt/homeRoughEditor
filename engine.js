@@ -1099,7 +1099,12 @@ function _MOUSEMOVE(event) {
 
   // ---DRAG VIEWBOX PANNING -------------------------------------------------------
 
-  if (mode == 'select_mode' && drag == 'on') {
+  // Check if background image tools are open - if so, disable global panning
+  const backgroundImageToolsOpen = document.getElementById('backgroundImageTools') && 
+    document.getElementById('backgroundImageTools').style.display !== 'none' &&
+    window.getComputedStyle(document.getElementById('backgroundImageTools')).display !== 'none';
+
+  if (mode == 'select_mode' && drag == 'on' && !backgroundImageToolsOpen) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
     distX = (snap.xMouse - pox) * factor;

@@ -340,6 +340,22 @@
     <br />
   </div>
 
+  <div id="backgroundImageTools" class="leftBox">
+    <h2>Background Image Settings</h2>
+    <hr />
+    <section id="backgroundImageScale">
+      <p>Scale [<span id="backgroundImageScaleRange"></span>] : <span id="backgroundImageScaleVal">100</span>%</p>
+      <input type="range" id="backgroundImageScaleSlider" step="5" min="10" max="300" value="100" class="range" />
+      <p>Opacity [<span id="backgroundImageOpacityRange"></span>] : <span id="backgroundImageOpacityVal">70</span>%</p>
+      <input type="range" id="backgroundImageOpacitySlider" step="5" min="0" max="100" value="70" class="range" />
+    </section>
+    <br />
+    <button class="btn btn-danger fully" id="backgroundImageRemove"><i class="fa fa-2x fa-trash" aria-hidden="true"></i></button>
+    <button class="btn btn-info" style="margin-top:50px"
+      onclick="hideBackgroundImageTools();fonc_button('select_mode');$('#boxinfo').html('Selection mode');"><i
+        class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
+  </div>
+
   <div id="panel" class="leftBox">
     <ul class="list-unstyled">
       <li><button class="btn disabled halfy " id="undo" title="undo"><i class="fa fa-chevron-circle-left"
@@ -467,8 +483,18 @@
             <label for="showLayerEnergy">Energy</label>
           </div>
         </div>
+        <div class="funkyradio" style="font-size:0.8em">
+          <div class="funkyradio-info">
+            <input type="checkbox" id="showLayerBackground" checked />
+            <label for="showLayerBackground">Background Image</label>
+          </div>
+        </div>
       </div>
 
+      <li><button class="btn btn-light shadow fully" id="export_mode" title="Export floorplan as JSON"><i class="fa fa-download" aria-hidden="true"></i> EXPORT</button></li>
+      <li><button class="btn btn-light shadow fully" id="import_mode" title="Import floorplan from JSON"><i class="fa fa-upload" aria-hidden="true"></i> IMPORT</button></li>
+      <li><button class="btn btn-light shadow fully" id="import_image_mode" title="Import background image (PNG/JPG)"><i class="fa fa-image" aria-hidden="true"></i> IMPORT IMAGE</button></li>
+      <br />
       <li><button class="btn btn-light shadow halfy " id="report_mode" title="Show report"><i class="fa fa-calculator"
             aria-hidden="true"></i>
           <button class="btn btn-light shadow halfy pull-right"
@@ -618,5 +644,6 @@
 <script src="qSVG.js"></script>
 <script src="editor.js"></script>
 <script src="engine.js"></script>
+<script src="export.js"></script>
 
 </html>

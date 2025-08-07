@@ -861,6 +861,17 @@ document.getElementById("showLayerEnergy").addEventListener("click", function ()
     }
 });
 
+document.getElementById("showLayerBackground").addEventListener("click", function () {
+    const backgroundImage = document.getElementById('backgroundImage');
+    if (backgroundImage) {
+        if (document.getElementById("showLayerBackground").checked) {
+            backgroundImage.style.display = 'block';
+        } else {
+            backgroundImage.style.display = 'none';
+        }
+    }
+});
+
 // document.getElementById("showLayerFurniture").addEventListener("click", function () {
 //   if (document.getElementById("showLayerFurniture").checked) {
 //     $('#boxFurniture').show(200);
@@ -2188,3 +2199,63 @@ function pushToConstruc(construc, path, fill, stroke, strokeDashArray, opacity =
         'opacity': opacity
     });
 }
+
+// Export button event handler
+document.getElementById('export_mode').addEventListener('click', function() {
+    // Generate filename with current date
+    const now = new Date();
+    const dateStr = now.getFullYear() + '-' + 
+                   String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                   String(now.getDate()).padStart(2, '0');
+    const filename = 'floorplan_' + dateStr;
+    
+    // Call the export function
+    if (exportFloorplanJSON(filename, true)) {
+        $('#boxinfo').html('Floorplan exported successfully!');
+    } else {
+        $('#boxinfo').html('Export failed. Please try again.');
+    }
+});
+
+// Import button event handler
+document.getElementById('import_mode').addEventListener('click', function() {
+    // Show confirmation dialog before importing (will clear current work)
+    if (WALLS.length > 0 || OBJDATA.length > 0 || ROOM.length > 0) {
+        if (!confirm('Importing will replace your current floorplan. Are you sure you want to continue?')) {
+            $('#boxinfo').html('Import cancelled');
+            return;
+        }
+    }
+    
+    // Trigger the file selection dialog
+    triggerImportDialog();
+});
+
+// Import image button event handler
+document.getElementById('import_image_mode').addEventListener('click', function() {
+    // Trigger the image import dialog
+    triggerImageImportDialog();
+});
+
+// Background image scale slider event handler
+document.getElementById('backgroundImageScaleSlider').addEventListener('input', function() {
+    const scaleValue = this.value;
+    scaleBackgroundImage(scaleValue);
+    document.getElementById('backgroundImageScaleVal').textContent = scaleValue;
+});
+
+// Background image opacity slider event handler
+document.getElementById('backgroundImageOpacitySlider').addEventListener('input', function() {
+    const opacityValue = this.value;
+    setBackgroundImageOpacity(opacityValue);
+    document.getElementById('backgroundImageOpacityVal').textContent = opacityValue;
+});
+
+// Background image remove button event handler
+document.getElementById('backgroundImageRemove').addEventListener('click', function() {
+    if (confirm('Are you sure you want to remove the background image?')) {
+        removeBackgroundImage();
+        hideBackgroundImageTools();
+        $('#boxinfo').html('Background image removed');
+    }
+});
