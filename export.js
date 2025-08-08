@@ -1057,6 +1057,10 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             }
         }
 
+        
+
+
+
         // Convert walls to line segments
         // Each wall becomes [[start.x, start.y], [end.x, end.y]]
         for (let i = 0; i < WALLS.length; i++) {
@@ -1073,6 +1077,21 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                 ]);
             }
         }
+
+        // Classify walls
+        const { internal, external } = classifyWalls(blenderData);
+        // Attempt to stitch external walls into a single outline polygon
+        const externalOutline = buildExternalPolygon(external, 0.03);
+        if (externalOutline && externalOutline.length >= 3) {
+            blenderData.external_outline = externalOutline;
+        }
+
+        // Build internal outlines by joining segments (chains may be open)
+        const internalOutlines = buildJoinedChains(internal, 0.03);
+        if (internalOutlines && internalOutlines.length > 0) {
+            blenderData.internal_outlines = internalOutlines;
+        }
+
 
         // Convert objects (doors and windows) to position arrays
         for (let i = 0; i < OBJDATA.length; i++) {
@@ -1137,4 +1156,275 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         console.error('Error exporting for Blender:', error);
         return false;
     }
+}
+
+/**
+ * Classify wall segments into internal vs external using room polygons from blenderData.main.
+ * A wall is considered INTERNAL if points on both sides of its midpoint lie inside any room polygon.
+ * Otherwise it is EXTERNAL.
+ *
+ * Coordinate system: expects the same centered, meter-scaled coords used by exportForBlender
+ *   - blenderData.main: Array of room polygons -> [ [ [x,y], ... ], ... ]
+ *   - blenderData.walls: Array of wall segments -> [ [ [x1,y1], [x2,y2] ], ... ]
+ *
+ * @param {Object} blenderData
+ * @param {number} [epsilon=0.2] - Offset distance from midpoint in meters for inside/outside tests
+ * @returns {{ internal: Array, external: Array }}
+ */
+function classifyWalls(blenderData, epsilon = 0.2) {
+    if (!blenderData || !Array.isArray(blenderData.walls) || !Array.isArray(blenderData.main)) {
+        console.warn('classifyWalls: Invalid blenderData structure.');
+        return { internal: [], external: blenderData && blenderData.walls ? [...blenderData.walls] : [] };
+    }
+
+    // Ray-casting point-in-polygon test
+    function pointInPolygon(point, polygon) {
+        // polygon: [ [x,y], [x,y], ... ]
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i][0], yi = polygon[i][1];
+            const xj = polygon[j][0], yj = polygon[j][1];
+            const intersect = ((yi > point[1]) !== (yj > point[1])) &&
+                (point[0] < (xj - xi) * (point[1] - yi) / ((yj - yi) || 1e-12) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    function insideAnyRoom(pt) {
+        for (let k = 0; k < blenderData.main.length; k++) {
+            const poly = blenderData.main[k];
+            if (Array.isArray(poly) && poly.length >= 3 && pointInPolygon(pt, poly)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    const internal = [];
+    const external = [];
+
+    for (let i = 0; i < blenderData.walls.length; i++) {
+        const seg = blenderData.walls[i];
+        if (!Array.isArray(seg) || seg.length !== 2) {
+            // Malformed segment, treat as external by default
+            external.push(seg);
+            continue;
+        }
+        const ax = seg[0][0], ay = seg[0][1];
+        const bx = seg[1][0], by = seg[1][1];
+
+        // Midpoint
+        const mx = (ax + bx) / 2;
+        const my = (ay + by) / 2;
+
+        // Perpendicular unit vector (normal)
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy) || 1e-12;
+        // Normal vectors: ( -dy/len, dx/len ) and opposite
+        const nx = -dy / len;
+        const ny = dx / len;
+
+        // Sample points on both sides of the wall
+        const p1 = [mx + nx * epsilon, my + ny * epsilon];
+        const p2 = [mx - nx * epsilon, my - ny * epsilon];
+
+        const side1Inside = insideAnyRoom(p1);
+        const side2Inside = insideAnyRoom(p2);
+
+        if (side1Inside && side2Inside) {
+            internal.push(seg);
+        } else {
+            external.push(seg);
+        }
+    }
+
+    return { internal, external };
+}
+
+/**
+ * Build a closed polygon by stitching wall segments whose endpoints meet within a tolerance.
+ * Returns the largest closed loop found (by area) as an array of [x, y] points.
+ * If no closed loop can be formed, returns null.
+ *
+ * @param {Array} segments - Array of segments: [ [ [x1,y1], [x2,y2] ], ... ]
+ * @param {number} [tolerance=0.03] - Max distance between endpoints to be considered matching
+ * @returns {Array|null}
+ */
+function buildExternalPolygon(segments, tolerance = 0.03) {
+    if (!Array.isArray(segments) || segments.length === 0) return null;
+
+    // Utility: distance between points
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+    // Shoelace area (signed)
+    function polygonArea(poly) {
+        let area = 0;
+        for (let i = 0, n = poly.length; i < n; i++) {
+            const j = (i + 1) % n;
+            area += poly[i][0] * poly[j][1] - poly[j][0] * poly[i][1];
+        }
+        return area / 2;
+    }
+
+    // Make a mutable copy of segments
+    const pool = segments.map(s => [[s[0][0], s[0][1]], [s[1][0], s[1][1]]]);
+
+    let bestLoop = null;
+    let bestArea = 0;
+
+    // Try building loops starting from each segment in the pool
+    for (let startIdx = 0; startIdx < pool.length; startIdx++) {
+        if (!pool[startIdx]) continue; // already consumed
+        // Start a new chain
+        let [a, b] = pool[startIdx];
+        let chain = [a, b];
+        pool[startIdx] = null; // consume
+
+        // Extend chain forward until closed or stuck
+        let guard = 0;
+        while (guard++ < segments.length + 5) {
+            const tail = chain[chain.length - 1];
+            let found = false;
+            for (let i = 0; i < pool.length; i++) {
+                const seg = pool[i];
+                if (!seg) continue;
+                const sA = seg[0];
+                const sB = seg[1];
+
+                if (dist(tail, sA) <= tolerance) {
+                    chain.push(sB);
+                    pool[i] = null;
+                    found = true;
+                    break;
+                } else if (dist(tail, sB) <= tolerance) {
+                    chain.push(sA);
+                    pool[i] = null;
+                    found = true;
+                    break;
+                }
+            }
+
+            // Closed loop?
+            if (dist(chain[chain.length - 1], chain[0]) <= tolerance && chain.length > 3) {
+                // Remove duplicated last point if extremely close to first
+                chain[chain.length - 1] = chain[0];
+                // Compute area and keep the largest absolute-area loop
+                const unique = dedupeConsecutive(chain);
+                const clean = ensureClosed(unique);
+                const cleanNoDup = clean.slice(0, clean.length - 1); // area expects no repeated final point
+                const area = Math.abs(polygonArea(cleanNoDup));
+                if (area > bestArea) {
+                    bestArea = area;
+                    bestLoop = cleanNoDup;
+                }
+                break;
+            }
+
+            if (!found) break; // stuck
+        }
+    }
+
+    return bestLoop && bestLoop.length >= 3 ? bestLoop : null;
+
+    // Remove consecutive duplicates (within tolerance)
+    function dedupeConsecutive(points) {
+        const out = [];
+        for (let i = 0; i < points.length; i++) {
+            if (i === 0 || dist(points[i], points[i - 1]) > tolerance / 4) {
+                out.push(points[i]);
+            }
+        }
+        return out;
+    }
+
+    // Ensure first == last (closed)
+    function ensureClosed(points) {
+        if (points.length === 0) return points;
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (dist(first, last) > tolerance) {
+            return [...points, first];
+        }
+        return points;
+    }
+}
+
+/**
+ * Join segments into chains by matching endpoints within a tolerance.
+ * Chains do NOT need to be closed; returns all chains of 2+ points.
+ * Each chain is an array of [x,y] points in order.
+ *
+ * @param {Array} segments - [ [ [x1,y1], [x2,y2] ], ... ]
+ * @param {number} [tolerance=0.03]
+ * @returns {Array<Array<[number,number]>>}
+ */
+function buildJoinedChains(segments, tolerance = 0.03) {
+    if (!Array.isArray(segments) || segments.length === 0) return [];
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+    // Initialize pool of unused segments
+    const pool = segments.map(s => ({ pts: [[s[0][0], s[0][1]], [s[1][0], s[1][1]]], used: false }));
+    const chains = [];
+
+    for (let i = 0; i < pool.length; i++) {
+        if (pool[i].used) continue;
+        let [a, b] = pool[i].pts;
+        let chain = [a, b];
+        pool[i].used = true;
+
+        let extended = true;
+        let guard = 0;
+        while (extended && guard++ < segments.length * 3) {
+            extended = false;
+            const head = chain[0];
+            const tail = chain[chain.length - 1];
+
+            // Try to extend at tail
+            for (let j = 0; j < pool.length; j++) {
+                if (pool[j].used) continue;
+                const [p, q] = pool[j].pts;
+                if (dist(tail, p) <= tolerance) {
+                    chain.push(q);
+                    pool[j].used = true;
+                    extended = true;
+                    break;
+                } else if (dist(tail, q) <= tolerance) {
+                    chain.push(p);
+                    pool[j].used = true;
+                    extended = true;
+                    break;
+                }
+            }
+
+            // Try to extend at head if no tail extension
+            if (!extended) {
+                for (let j = 0; j < pool.length; j++) {
+                    if (pool[j].used) continue;
+                    const [p, q] = pool[j].pts;
+                    if (dist(head, p) <= tolerance) {
+                        chain.unshift(q);
+                        pool[j].used = true;
+                        extended = true;
+                        break;
+                    } else if (dist(head, q) <= tolerance) {
+                        chain.unshift(p);
+                        pool[j].used = true;
+                        extended = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Deduplicate consecutive near-equal points
+        const cleaned = [];
+        for (let k = 0; k < chain.length; k++) {
+            if (k === 0 || dist(chain[k], chain[k - 1]) > tolerance / 5) cleaned.push(chain[k]);
+        }
+        if (cleaned.length >= 2) chains.push(cleaned);
+    }
+
+    return chains;
 }
