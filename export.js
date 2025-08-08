@@ -1082,16 +1082,25 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         const { internal, external } = classifyWalls(blenderData);
         // Attempt to stitch external walls into a single outline polygon
         const externalOutline = buildExternalPolygon(external, 0.03);
-        if (externalOutline && externalOutline.length >= 3) {
-            blenderData.external_outline = externalOutline;
-        }
+        // if (externalOutline && externalOutline.length >= 3) {
+        //     blenderData.external_outline = externalOutline;
+        // }
 
         // Build internal outlines by joining segments (chains may be open)
         const internalOutlines = buildJoinedChains(internal, 0.03);
-        if (internalOutlines && internalOutlines.length > 0) {
-            blenderData.internal_outlines = internalOutlines;
+        // if (internalOutlines && internalOutlines.length > 0) {
+        //     blenderData.internal_outlines = internalOutlines;
+        // }
+
+        blenderData.walls = [];
+        
+        if (externalOutline && externalOutline.length >= 2) {
+            blenderData.walls.push(externalOutline);
         }
 
+        if (internalOutlines && internalOutlines.length > 0) {
+            blenderData.walls.push(...internalOutlines);
+        }
 
         // Convert objects (doors and windows) to position arrays
         for (let i = 0; i < OBJDATA.length; i++) {
@@ -1326,7 +1335,8 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
         }
     }
 
-    return bestLoop && bestLoop.length >= 3 ? bestLoop : null;
+    // Ensure closed loop by appending the first vertex at the end
+    return bestLoop && bestLoop.length >= 3 ? [...bestLoop, bestLoop[0]] : null;
 
     // Remove consecutive duplicates (within tolerance)
     function dedupeConsecutive(points) {
@@ -1363,6 +1373,29 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
 function buildJoinedChains(segments, tolerance = 0.03) {
     if (!Array.isArray(segments) || segments.length === 0) return [];
     const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    
+    // Calculate deviation angle from current chain direction
+    function calculateDeviationAngle(chain, currentPoint, nextPoint) {
+        if (chain.length < 2) return 0; // No existing direction to compare
+        
+        // Get the current direction vector (from second-to-last to last point)
+        const prevPoint = chain[chain.length - 2];
+        const currentDir = [currentPoint[0] - prevPoint[0], currentPoint[1] - prevPoint[1]];
+        const currentDirMag = Math.hypot(currentDir[0], currentDir[1]);
+        
+        if (currentDirMag < 1e-6) return 0; // Degenerate case
+        
+        // Get the proposed direction vector
+        const nextDir = [nextPoint[0] - currentPoint[0], nextPoint[1] - currentPoint[1]];
+        const nextDirMag = Math.hypot(nextDir[0], nextDir[1]);
+        
+        if (nextDirMag < 1e-6) return Math.PI; // Degenerate case - maximum deviation
+        
+        // Calculate angle between vectors using dot product
+        const dot = (currentDir[0] * nextDir[0] + currentDir[1] * nextDir[1]) / (currentDirMag * nextDirMag);
+        const clampedDot = Math.max(-1, Math.min(1, dot)); // Clamp to avoid numerical errors
+        return Math.acos(clampedDot); // Return angle in radians (0 = straight, π = opposite)
+    }
 
     // Initialize pool of unused segments
     const pool = segments.map(s => ({ pts: [[s[0][0], s[0][1]], [s[1][0], s[1][1]]], used: false }));
@@ -1381,39 +1414,63 @@ function buildJoinedChains(segments, tolerance = 0.03) {
             const head = chain[0];
             const tail = chain[chain.length - 1];
 
-            // Try to extend at tail
+            // Try to extend at tail - prioritize straight connections
+            let bestTailOption = null;
+            let bestTailAngle = Infinity;
+            
             for (let j = 0; j < pool.length; j++) {
                 if (pool[j].used) continue;
                 const [p, q] = pool[j].pts;
+                
                 if (dist(tail, p) <= tolerance) {
-                    chain.push(q);
-                    pool[j].used = true;
-                    extended = true;
-                    break;
+                    const angle = calculateDeviationAngle(chain, tail, q);
+                    if (angle < bestTailAngle) {
+                        bestTailAngle = angle;
+                        bestTailOption = { index: j, nextPoint: q };
+                    }
                 } else if (dist(tail, q) <= tolerance) {
-                    chain.push(p);
-                    pool[j].used = true;
-                    extended = true;
-                    break;
+                    const angle = calculateDeviationAngle(chain, tail, p);
+                    if (angle < bestTailAngle) {
+                        bestTailAngle = angle;
+                        bestTailOption = { index: j, nextPoint: p };
+                    }
                 }
             }
+            
+            if (bestTailOption) {
+                chain.push(bestTailOption.nextPoint);
+                pool[bestTailOption.index].used = true;
+                extended = true;
+            }
 
-            // Try to extend at head if no tail extension
+            // Try to extend at head if no tail extension - prioritize straight connections
             if (!extended) {
+                let bestHeadOption = null;
+                let bestHeadAngle = Infinity;
+                
                 for (let j = 0; j < pool.length; j++) {
                     if (pool[j].used) continue;
                     const [p, q] = pool[j].pts;
+                    
                     if (dist(head, p) <= tolerance) {
-                        chain.unshift(q);
-                        pool[j].used = true;
-                        extended = true;
-                        break;
+                        const angle = calculateDeviationAngle(chain.slice().reverse(), head, q);
+                        if (angle < bestHeadAngle) {
+                            bestHeadAngle = angle;
+                            bestHeadOption = { index: j, nextPoint: q };
+                        }
                     } else if (dist(head, q) <= tolerance) {
-                        chain.unshift(p);
-                        pool[j].used = true;
-                        extended = true;
-                        break;
+                        const angle = calculateDeviationAngle(chain.slice().reverse(), head, p);
+                        if (angle < bestHeadAngle) {
+                            bestHeadAngle = angle;
+                            bestHeadOption = { index: j, nextPoint: p };
+                        }
                     }
+                }
+                
+                if (bestHeadOption) {
+                    chain.unshift(bestHeadOption.nextPoint);
+                    pool[bestHeadOption.index].used = true;
+                    extended = true;
                 }
             }
         }
