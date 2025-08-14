@@ -385,31 +385,39 @@
       <li><button class="btn btn-light shadow fully " id="node_mode"><i class="fa fa-2x fa-scissors"
             aria-hidden="true"></i></button></li>
       <br />
-      <li><button class="btn btn-light shadow fully " id="distance_mode" data-toggle="tooltip" data-placement="right"
+      <li><button class="btn btn-light shadow fully " id="distance_mode" data-toggle="tooltip" data-placement="right" style="display:none"
           title="Add a measurement">MEASURE</button></li>
-      <li><button class="btn btn-light shadow fully " id="text_mode" data-toggle="tooltip" data-placement="right"
+      <li><button class="btn btn-light shadow fully " id="text_mode" data-toggle="tooltip" data-placement="right" style="display:none"
           title="Add text">TEXT</button></li>
       <br />
       <div id="door_list" class="list-unstyled sub"
-        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:150px">
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:150px;display:none">
         <button class="btn fully door" id="aperture">Aperture</button>
         <button class="btn fully door" id="simple">Simple</button>
         <button class="btn fully door" id="double">Double</button>
         <button class="btn fully door" id="pocket">Pocket</button>
       </div>
-      <li><button class="btn btn-light shadow fully " id="door_mode"
+      <li><button class="btn btn-light shadow fully " id="door_mode" style="display:none"
           onclick="$('.sub').hide();$('#door_list').toggle(200);$('#window_list').hide();">DOOR</button></li>
 
+      <!-- New simplified Door button maps to Door/Simple without duplicating IDs -->
+      <li><button class="btn btn-light shadow fully" id="door_simple_btn" title="Add a simple door"
+          onclick="$('#select_mode').trigger('click'); linElement.css('cursor','crosshair');$('#boxinfo').html('Add a door');fonc_button('door_mode','simple');">Door</button></li>
+
       <div id="window_list" class="list-unstyled sub"
-        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:150px">
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:150px;display:none">
         <button class="btn fully window" id="fix">Fix</button>
         <button class="btn fully window" id="flap">Simple</button>
         <button class="btn fully window" id="twin">Double</button>
         <button class="btn fully window" id="bay">Slide</button>
       </div>
-      <li><button class="btn btn-light shadow fully " id="window_mode"
+      <li><button class="btn btn-light shadow fully " id="window_mode" style="display:none"
           onclick="$('.sub').hide();$('#window_list').toggle(200);$('#door_list').hide()">WINDOW</button></li>
-      <li><button class="btn btn-light shadow fully object" id="stair_mode"
+
+      <!-- New simplified Window button maps to Window/Fix without duplicating IDs -->
+      <li><button class="btn btn-light shadow fully" id="window_fix_btn" title="Add a fixed window"
+          onclick="$('#select_mode').trigger('click'); linElement.css('cursor','crosshair');$('#boxinfo').html('Add a window');fonc_button('door_mode','fix');">Window</button></li>
+      <li><button class="btn btn-light shadow fully object" id="stair_mode" style="display:none"
           onclick="$('.sub').hide();$('#door_list').hide()">STAIR</button></li>
       <br />
       <div id="energy_list" class="list-unstyled sub"
@@ -449,16 +457,16 @@
         </div>
 
       </div>
-      <li><button class="btn btn-light shadow fully " id="object_mode"
+      <li><button class="btn btn-light shadow fully " id="object_mode" style="display:none"
           onclick="$('.sub').hide();$('#energy_list').toggle(200);">ENERGY</button></li>
       <!-- <li><button class="btn btn-light shadow fully " id="object_mode" onclick="$('.sub').hide();$('#object_list').toggle(200);">FURNITURE</button></li> -->
       <br />
 
       <li><button class="btn btn-light shadow fully " id="layer_mode"
-          onclick="$('.sub').hide();$('#layer_list').toggle(200);">Layers</button></li>
+          onclick="$('.sub').hide();$('#layer_list').css('top', $('#layer_mode').position().top + 'px').toggle(200);">Layers</button></li>
 
       <div id="layer_list" class="list-unstyled sub"
-        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;bottom:100px;width:200px">
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:200px">
         <div class="funkyradio" style="font-size:0.8em">
           <div class="funkyradio-info">
             <input type="checkbox" id="showRib" checked />
@@ -477,7 +485,7 @@
             <label for="showLayerRoom">Texture</label>
           </div>
         </div>
-        <div class="funkyradio" style="font-size:0.8em">
+        <div class="funkyradio" style="font-size:0.8em;display:none">
           <div class="funkyradio-info">
             <input type="checkbox" id="showLayerEnergy" checked />
             <label for="showLayerEnergy">Energy</label>
@@ -491,10 +499,21 @@
         </div>
       </div>
       <br />
-      <li><button class="btn btn-light shadow fully" id="export_mode" title="Export floorplan as JSON"><i class="fa fa-download" aria-hidden="true"></i> EXPORT</button></li>
-      <li><button class="btn btn-light shadow fully" id="export_blender_mode" title="Export floorplan for Blender"><i class="fa fa-cube" aria-hidden="true"></i> EXPORT BLENDER</button></li>
-      <li><button class="btn btn-light shadow fully" id="import_mode" title="Import floorplan from JSON"><i class="fa fa-upload" aria-hidden="true"></i> IMPORT</button></li>
-      <li><button class="btn btn-light shadow fully" id="import_image_mode" title="Import background image (PNG/JPG)"><i class="fa fa-image" aria-hidden="true"></i> IMPORT IMAGE</button></li>
+      <div id="export_list" class="list-unstyled sub"
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:200px">
+        <button class="btn fully" id="export_mode" title="Export floorplan as JSON"><i class="fa fa-download" aria-hidden="true"></i> Export to Json</button>
+        <button class="btn fully" id="export_blender_mode" title="Export floorplan for Blender"><i class="fa fa-cube" aria-hidden="true"></i> Export for Blender</button>
+      </div>
+      <li><button class="btn btn-light shadow fully" id="export_menu"
+          onclick="$('.sub').hide();$('#export_list').toggle(200);">Export</button></li>
+      <div id="import_list" class="list-unstyled sub"
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:200px">
+        <button class="btn fully" id="import_mode" title="Import floorplan from JSON file"><i class="fa fa-upload" aria-hidden="true"></i> Import Json</button>
+        <button class="btn fully" id="import_image_mode" title="Import background image"><i class="fa fa-image" aria-hidden="true"></i> Import Floorplan Image</button>
+        <button class="btn fully" id="import_ai_mode" title="Import floorplan from AI JSON file"><i class="fa fa-robot" aria-hidden="true"></i> Import from AI</button>
+        </div>
+      <li><button class="btn btn-light shadow fully" id="import_menu"
+          onclick="$('.sub').hide();$('#import_list').toggle(200);">Import</button></li>
       <br />
       <li><button class="btn btn-light shadow halfy " id="report_mode" title="Show report"><i class="fa fa-calculator"
             aria-hidden="true"></i>

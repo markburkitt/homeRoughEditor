@@ -1675,8 +1675,9 @@ $('#room_mode').click(function () {
 $('#select_mode').click(function () {
     $('#boxinfo').html('Mode "select"');
     if (typeof (binder) != 'undefined') {
-        binder.remove();
-        delete binder;
+        try { if (binder.graph) $(binder.graph).remove(); } catch (e) {}
+        $('#boxbind').empty();
+        binder = undefined;
     }
 
     fonc_button('select_mode');
@@ -2246,6 +2247,25 @@ document.getElementById('import_mode').addEventListener('click', function() {
     
     // Trigger the file selection dialog
     triggerImportDialog();
+});
+
+// Import from AI button event handler
+document.getElementById('import_ai_mode').addEventListener('click', function () {
+    // Show confirmation dialog before importing (will clear current work)
+    if (typeof WALLS !== 'undefined' && (WALLS.length > 0 || (typeof OBJDATA !== 'undefined' && OBJDATA.length > 0) || (typeof ROOM !== 'undefined' && ROOM.length > 0))) {
+        if (!confirm('Importing will replace your current floorplan. Are you sure you want to continue?')) {
+            if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('Import cancelled');
+            return;
+        }
+    }
+
+    // Trigger the AI import dialog
+    if (typeof triggerAIImportDialog === 'function') {
+        triggerAIImportDialog();
+    } else {
+        console.error('triggerAIImportDialog is not available');
+        if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('AI import is not available');
+    }
 });
 
 // Import image button event handler

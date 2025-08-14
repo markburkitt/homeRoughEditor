@@ -112,6 +112,123 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
     }
 }
 
+
+/**
+ * Trigger file input dialog for importing AI JSON ({"walls": [[x0,y0,x1,y1], ...]})
+ */
+function triggerAIImportDialog() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.style.display = 'none';
+
+    fileInput.addEventListener('change', function (event) {
+        const file = event.target.files[0];
+        if (file) {
+            importAIFloorplanJSON(file).then(() => {
+                document.body.removeChild(fileInput);
+            });
+        } else {
+            document.body.removeChild(fileInput);
+        }
+    });
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+}
+
+/**
+ * Import simple AI floorplan JSON with format: { "walls": [[x0,y0,x1,y1], ...] }
+ * @param {File} file
+ * @returns {Promise<boolean>}
+ */
+function importAIFloorplanJSON(file) {
+    return new Promise((resolve) => {
+        if (!file) {
+            console.error('No file provided for AI import');
+            if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('No file selected for AI import');
+            resolve(false);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                const jsonData = JSON.parse(e.target.result);
+                if (!validateAIImportData(jsonData)) {
+                    if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('Invalid AI JSON format. Expected {"walls": [[x0,y0,x1,y1], ...]}');
+                    resolve(false);
+                    return;
+                }
+
+                // Clear current plan
+                clearCurrentFloorplan();
+
+                // Create walls
+                const created = [];
+                const defaultThick = typeof wallSize !== 'undefined' ? wallSize : 0.2;
+                for (let i = 0; i < jsonData.walls.length; i++) {
+                    const seg = jsonData.walls[i];
+                    const start = { x: seg[0], y: seg[1] };
+                    const end = { x: seg[2], y: seg[3] };
+                    const w = new editor.wall(start, end, 'normal', defaultThick);
+                    WALLS.push(w);
+                    created.push(w);
+                }
+
+                // Connect walls by matching endpoints (with small tolerance)
+                const tol = 1e-3;
+                const eq = (a, b) => (Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol);
+                for (let i = 0; i < created.length; i++) {
+                    const wi = created[i];
+                    for (let j = 0; j < created.length; j++) {
+                        if (i === j) continue;
+                        const wj = created[j];
+                        if (!wi.parent && eq(wj.end, wi.start)) wi.parent = wj;
+                        if (!wi.child && eq(wj.start, wi.end)) wi.child = wj;
+                        if (wi.parent && wi.child) break;
+                    }
+                }
+
+                // Recompute and save
+                editor.architect(WALLS);
+                if (typeof save === 'function') save();
+
+                if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('AI floorplan imported successfully');
+                resolve(true);
+            } catch (err) {
+                console.error('Error importing AI JSON:', err);
+                if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('AI import failed: ' + err.message);
+                resolve(false);
+            }
+        };
+
+        reader.onerror = function () {
+            console.error('Error reading AI JSON file');
+            if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('Error reading AI JSON file');
+            resolve(false);
+        };
+
+        reader.readAsText(file);
+    });
+}
+
+/**
+ * Validate AI import data
+ * @param {Object} data
+ */
+function validateAIImportData(data) {
+    if (!data || !Array.isArray(data.walls)) return false;
+    for (let i = 0; i < data.walls.length; i++) {
+        const seg = data.walls[i];
+        if (!Array.isArray(seg) || seg.length !== 4) return false;
+        for (let k = 0; k < 4; k++) {
+            if (typeof seg[k] !== 'number' || !isFinite(seg[k])) return false;
+        }
+    }
+    return true;
+}
+
 /**
  * Export floorplan data with custom options
  * @param {Object} options - Export configuration
