@@ -71,6 +71,8 @@ document.addEventListener("keydown", function (event) {
 function _MOUSEMOVE(event) {
   event.preventDefault();
   $('.sub').hide(100);
+  // Cleanup debug markers so they don't linger when moving away from key points
+  $('#boxDebug').empty();
 
   //**************************************************************************
   //********************   TEXTE   MODE **************************************
@@ -434,7 +436,13 @@ function _MOUSEMOVE(event) {
           $('#boxbind').append(binder.graph);
         }
         else {
-          if (event.target == binder.graph.get(0).firstChild) {
+          // Guard against cases where binder may not have a graph (e.g., binder is a simple SVG element from other modes)
+          var hasBinderGraph = (typeof binder.graph !== 'undefined') &&
+                               (typeof binder.graph.get === 'function') &&
+                               binder.graph.get(0) &&
+                               binder.graph.get(0).firstChild;
+
+          if (hasBinderGraph && event.target == binder.graph.get(0).firstChild) {
             cursor('move');
             binder.graph.get(0).firstChild.setAttribute("class", "circle_css_2");
             binder.type = "obj";
@@ -442,7 +450,9 @@ function _MOUSEMOVE(event) {
           }
           else {
             cursor('default');
-            binder.graph.get(0).firstChild.setAttribute("class", "circle_css_1");
+            if (hasBinderGraph) {
+              binder.graph.get(0).firstChild.setAttribute("class", "circle_css_1");
+            }
             binder.type = false;
           }
         }

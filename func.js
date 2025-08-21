@@ -1064,21 +1064,22 @@ function zoom_maker(lens, xmove, xview) {
     if (lens === 'zoomin' && zoom < 14 && zoom > 0) {
         zoom++;
         let oldWidth = width_viewbox;
-        width_viewbox -= xmove;
         let ratioWidthZoom = taille_w / width_viewbox;
+        let newWidth = width_viewbox - xmove;
+        if (newWidth < 100) newWidth = 100;
+        width_viewbox = newWidth;
         height_viewbox = width_viewbox * ratio_viewbox;
+        originX_viewbox = originX_viewbox + ((oldWidth - width_viewbox) / 2);
+        originY_viewbox = originY_viewbox + (((oldWidth - width_viewbox) / 2) * ratio_viewbox);
         myDiv = document.getElementById("scaleVal");
         myDiv.style.width = 60 * ratioWidthZoom + 'px';
-
-        originX_viewbox = originX_viewbox + (xmove / 2);
-        originY_viewbox = originY_viewbox + (xmove / 2 * ratio_viewbox);
     }
-    factor = width_viewbox / taille_w;
-    if (lens === 'zoomreset') {
+    if (lens === 'zoominit') {
+        width_viewbox = taille_w;
+        height_viewbox = width_viewbox * ratio_viewbox;
         originX_viewbox = 0;
         originY_viewbox = 0;
-        width_viewbox = taille_w;
-        height_viewbox = taille_h;
+        zoom = 9;
         factor = 1;
     }
     if (lens === 'zoomright') {
@@ -1097,9 +1098,77 @@ function zoom_maker(lens, xmove, xview) {
         originX_viewbox -= xmove;
         originY_viewbox -= xview;
     }
+    // Update pixel-to-SVG factor after any viewBox change
+    factor = width_viewbox / taille_w;
     $('svg').each(function () {
         $(this)[0].setAttribute('viewBox', originX_viewbox + ' ' + originY_viewbox + ' ' + width_viewbox + ' ' + height_viewbox)
     });
+}
+
+// Center the current floorplan in view by fitting the WALLS bounding box to the viewport
+function centerFloorplanView(padding = 40) {
+    try {
+        if (!Array.isArray(WALLS) || WALLS.length === 0) return false;
+
+        // Compute bounding box from wall endpoints
+        let minX, minY, maxX, maxY;
+        for (let i = 0; i < WALLS.length; i++) {
+            const s = WALLS[i].start;
+            const e = WALLS[i].end;
+            if (!i) {
+                minX = Math.min(s.x, e.x);
+                minY = Math.min(s.y, e.y);
+                maxX = Math.max(s.x, e.x);
+                maxY = Math.max(s.y, e.y);
+            } else {
+                minX = Math.min(minX, s.x, e.x);
+                minY = Math.min(minY, s.y, e.y);
+                maxX = Math.max(maxX, s.x, e.x);
+                maxY = Math.max(maxY, s.y, e.y);
+            }
+        }
+
+        // Handle degenerate cases
+        if (minX === undefined || minY === undefined || maxX === undefined || maxY === undefined) return false;
+        const bboxW = Math.max(1, maxX - minX);
+        const bboxH = Math.max(1, maxY - minY);
+
+        // Target size keeping aspect ratio
+        const viewAspect = ratio_viewbox; // height/width
+        const targetWidth = bboxW + 2 * padding;
+        const targetHeight = bboxH + 2 * padding;
+        const widthFromHeight = targetHeight / viewAspect;
+        const fitWidth = Math.max(targetWidth, widthFromHeight);
+        const fitHeight = fitWidth * viewAspect;
+
+        width_viewbox = fitWidth;
+        height_viewbox = fitHeight;
+
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        originX_viewbox = cx - (width_viewbox / 2);
+        originY_viewbox = cy - (height_viewbox / 2);
+
+        // Update pixel-to-SVG factor based on new viewBox size
+        factor = width_viewbox / taille_w;
+
+        // Update scale indicator if present
+        const scaleEl = document.getElementById('scaleVal');
+        if (scaleEl) {
+            const ratioWidthZoom = taille_w / width_viewbox;
+            scaleEl.style.width = (60 * ratioWidthZoom) + 'px';
+        }
+
+        // Apply viewBox to all SVGs
+        $('svg').each(function () {
+            $(this)[0].setAttribute('viewBox', originX_viewbox + ' ' + originY_viewbox + ' ' + width_viewbox + ' ' + height_viewbox);
+        });
+
+        return true;
+    } catch (e) {
+        console.error('Error centering view:', e);
+        return false;
+    }
 }
 
 tactile = false;

@@ -241,7 +241,8 @@ var editor = {
 
   invisibleWall: function (wallToInvisble = false) {
     if (!wallToInvisble) wallToInvisble = binder.wall;
-    var objWall = editor.objFromWall(wallBind);
+    // Use the provided wall instead of an external variable to avoid undefined access
+    var objWall = editor.objFromWall(wallToInvisble);
     if (objWall.length == 0) {
       wallToInvisble.type = "separate";
       wallToInvisble.backUp = wallToInvisble.thick;
@@ -360,6 +361,8 @@ var editor = {
   rayCastingWall: function (snap) {
     var wallList = [];
     for (var i = 0; i < WALLS.length; i++) {
+      // Defensive: skip walls without full coords
+      if (!WALLS[i] || !WALLS[i].coords || WALLS[i].coords.length < 4) continue;
       var polygon = [];
       for (var pp = 0; pp < 4; pp++) {
         polygon.push({ x: WALLS[i].coords[pp].x, y: WALLS[i].coords[pp].y }); // FOR Z
@@ -417,6 +420,8 @@ var editor = {
   // RETURN OBJDATA INDEX LIST FROM AN WALL
   objFromWall: function (wall, typeObj = false) {
     var objList = [];
+    // Defensive: if wall is undefined or malformed, return empty list
+    if (!wall || !wall.start || !wall.end) return objList;
     for (var scan = 0; scan < OBJDATA.length; scan++) {
       var search;
       if (OBJDATA[scan].family == 'inWall') {
@@ -438,6 +443,8 @@ var editor = {
   rayCastingWalls: function (snap) {
     var wallList = [];
     for (var i = 0; i < WALLS.length; i++) {
+      // Defensive: skip walls without full coords
+      if (!WALLS[i] || !WALLS[i].coords || WALLS[i].coords.length < 4) continue;
       var polygon = [];
       for (var pp = 0; pp < 4; pp++) {
         polygon.push({ x: WALLS[i].coords[pp].x, y: WALLS[i].coords[pp].y }); // FOR Z

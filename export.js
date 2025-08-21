@@ -166,16 +166,32 @@ function importAIFloorplanJSON(file) {
                 // Clear current plan
                 clearCurrentFloorplan();
 
-                // Create walls
+                // Create walls (skip malformed segments)
                 const created = [];
                 const defaultThick = typeof wallSize !== 'undefined' ? wallSize : 0.2;
+                const isFiniteNum = (v) => typeof v === 'number' && isFinite(v);
+                const dist2 = (a, b) => {
+                    const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy;
+                };
+                let skipped = 0;
                 for (let i = 0; i < jsonData.walls.length; i++) {
                     const seg = jsonData.walls[i];
+                    // Validate structure and values
+                    if (!Array.isArray(seg) || seg.length !== 4) { skipped++; continue; }
                     const start = { x: seg[0], y: seg[1] };
                     const end = { x: seg[2], y: seg[3] };
-                    const w = new editor.wall(start, end, 'normal', defaultThick);
-                    WALLS.push(w);
-                    created.push(w);
+                    if (!isFiniteNum(start.x) || !isFiniteNum(start.y) || !isFiniteNum(end.x) || !isFiniteNum(end.y)) { skipped++; continue; }
+                    // Reject zero-length or near-zero walls
+                    if (dist2(start, end) < 1e-10) { skipped++; continue; }
+                    try {
+                        const w = new editor.wall(start, end, 'normal', defaultThick);
+                        // Basic sanity on constructed wall
+                        if (!w || !w.start || !w.end || !isFiniteNum(w.start.x) || !isFiniteNum(w.start.y) || !isFiniteNum(w.end.x) || !isFiniteNum(w.end.y)) { skipped++; continue; }
+                        WALLS.push(w);
+                        created.push(w);
+                    } catch (e2) {
+                        skipped++;
+                    }
                 }
 
                 // Connect walls by matching endpoints (with small tolerance)
@@ -207,9 +223,16 @@ function importAIFloorplanJSON(file) {
                 // Save state
                 if (typeof save === 'function') save();
 
-                if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('AI floorplan imported successfully');
+                if (typeof $('#boxinfo') !== 'undefined') {
+                    const msg = skipped > 0 ? `AI floorplan imported successfully (skipped ${skipped} malformed wall${skipped>1?'s':''})` : 'AI floorplan imported successfully';
+                    $('#boxinfo').html(msg);
+                }
                 if (typeof fonc_button === 'function') {
                     try { fonc_button('select_mode'); } catch (e) { /* noop */ }
+                }
+                // Center the imported plan in view
+                if (typeof centerFloorplanView === 'function') {
+                    try { centerFloorplanView(40); } catch (e) { /* noop */ }
                 }
                 resolve(true);
             } catch (err) {
@@ -334,7 +357,10 @@ function addOpeningsFromAI(jsonData) {
             const wall = best.wall;
             const angleDeg = qSVG.angleDeg(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
             // Use standardized width for doors; clamped bounds width for windows
-            const sizeForObj = best.widthAlongDesired;
+            // Ensure it fits the usable span on the wall; shrink if necessary
+            const minWidthPx = 20; // don't create degenerate tiny openings
+            const spanFit = Math.max(0, best.widthAlongClamped);
+            let sizeForObj = Math.max(minWidthPx, Math.min(best.widthAlongDesired, spanFit));
             const obj = new editor.obj2D('inWall', 'doorWindow', item.type, best.pos, 0, 0, sizeForObj, 'normal', wall.thick);
 
             let finalAngle = angleDeg;
@@ -347,16 +373,36 @@ function addOpeningsFromAI(jsonData) {
             obj.angleSign = sign;
 
             // Limits along the wall
-            const limits = limitObj(wall.equations.base, obj.size, best.pos);
+            let limits = limitObj(wall.equations.base, obj.size, best.pos);
             if (Array.isArray(limits)) {
                 // verify both points are on the segment
                 const onSeg = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
-                if (onSeg(limits[0]) && onSeg(limits[1])) {
-                    obj.limit = limits;
-                    // SNAP: set position exactly to the midpoint of the limits on the wall
-                    const mid = qSVG.middle(limits[0].x, limits[0].y, limits[1].x, limits[1].y);
-                    obj.x = mid.x;
-                    obj.y = mid.y;
+
+                // If limits are off the segment, clamp size to fit the segment span
+                if (!(onSeg(limits[0]) && onSeg(limits[1]))) {
+                    // Compute clamped endpoints projected to the wall segment extents
+                    const clampToSeg = (pt) => ({
+                        x: qSVG.btwn(pt.x, wall.start.x, wall.end.x) ? pt.x : (Math.abs(pt.x - wall.start.x) < Math.abs(pt.x - wall.end.x) ? wall.start.x : wall.end.x),
+                        y: qSVG.btwn(pt.y, wall.start.y, wall.end.y) ? pt.y : (Math.abs(pt.y - wall.start.y) < Math.abs(pt.y - wall.end.y) ? wall.start.y : wall.end.y)
+                    });
+                    const c0 = clampToSeg(limits[0]);
+                    const c1 = clampToSeg(limits[1]);
+                    const clampedSpan = qSVG.measure(c0.x, c0.y, c1.x, c1.y);
+                    if (isFinite(clampedSpan) && clampedSpan > 0) {
+                        obj.size = Math.max(minWidthPx, Math.min(obj.size, clampedSpan));
+                        limits = limitObj(wall.equations.base, obj.size, best.pos);
+                    }
+                }
+
+                if (Array.isArray(limits)) {
+                    const onSeg2 = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+                    if (onSeg2(limits[0]) && onSeg2(limits[1])) {
+                        obj.limit = limits;
+                        // SNAP: set position exactly to the midpoint of the limits on the wall
+                        const mid = qSVG.middle(limits[0].x, limits[0].y, limits[1].x, limits[1].y);
+                        obj.x = mid.x;
+                        obj.y = mid.y;
+                    }
                 }
             }
 
