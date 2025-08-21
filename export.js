@@ -155,6 +155,8 @@ function importAIFloorplanJSON(file) {
         reader.onload = function (e) {
             try {
                 const jsonData = JSON.parse(e.target.result);
+                
+                // Validate the JSON structure
                 if (!validateAIImportData(jsonData)) {
                     if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('Invalid AI JSON format. Expected {"walls": [[x0,y0,x1,y1], ...]}');
                     resolve(false);
@@ -190,11 +192,25 @@ function importAIFloorplanJSON(file) {
                     }
                 }
 
-                // Recompute and save
+                // Compute wall geometry first
                 editor.architect(WALLS);
+
+                // If doors/windows provided, place them
+                try {
+                    if (Array.isArray(jsonData.doors) || Array.isArray(jsonData.windows)) {
+                        addOpeningsFromAI(jsonData);
+                    }
+                } catch (openErr) {
+                    console.warn('Opening placement warning:', openErr);
+                }
+
+                // Save state
                 if (typeof save === 'function') save();
 
                 if (typeof $('#boxinfo') !== 'undefined') $('#boxinfo').html('AI floorplan imported successfully');
+                if (typeof fonc_button === 'function') {
+                    try { fonc_button('select_mode'); } catch (e) { /* noop */ }
+                }
                 resolve(true);
             } catch (err) {
                 console.error('Error importing AI JSON:', err);
@@ -219,6 +235,7 @@ function importAIFloorplanJSON(file) {
  */
 function validateAIImportData(data) {
     if (!data || !Array.isArray(data.walls)) return false;
+    // walls: [[x0,y0,x1,y1], ...]
     for (let i = 0; i < data.walls.length; i++) {
         const seg = data.walls[i];
         if (!Array.isArray(seg) || seg.length !== 4) return false;
@@ -226,7 +243,135 @@ function validateAIImportData(data) {
             if (typeof seg[k] !== 'number' || !isFinite(seg[k])) return false;
         }
     }
+    // Optional doors/windows: arrays of 8 numbers per rectangle
+    const checkRects = (arr) => {
+        if (!arr) return true;
+        if (!Array.isArray(arr)) return false;
+        for (let i = 0; i < arr.length; i++) {
+            const r = arr[i];
+            if (!Array.isArray(r) || r.length !== 8) return false;
+            for (let k = 0; k < 8; k++) {
+                if (typeof r[k] !== 'number' || !isFinite(r[k])) return false;
+            }
+        }
+        return true;
+    };
+    if (!checkRects(data.doors)) return false;
+    if (!checkRects(data.windows)) return false;
     return true;
+}
+
+// ------------------------ Helpers for AI openings placement ------------------------
+function addOpeningsFromAI(jsonData) {
+    const rectsWithType = [];
+    if (Array.isArray(jsonData.doors)) {
+        for (const r of jsonData.doors) rectsWithType.push({ type: 'simple', rect: r });
+    }
+    if (Array.isArray(jsonData.windows)) {
+        for (const r of jsonData.windows) rectsWithType.push({ type: 'fix', rect: r });
+    }
+
+    for (const item of rectsWithType) {
+        const pts = [
+            { x: item.rect[0], y: item.rect[1] },
+            { x: item.rect[2], y: item.rect[3] },
+            { x: item.rect[4], y: item.rect[5] },
+            { x: item.rect[6], y: item.rect[7] }
+        ];
+        const center = {
+            x: (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4,
+            y: (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4
+        };
+        // Standardized sizes (pixels) based on meter scale
+        const meterPx = 100;
+        const standardDoorWidthPx = 0.6 * meterPx; // 0.6 m doors
+
+        // Find best wall by distance to the bounds midpoint (no intersection required)
+        let best = null; // { wall, pos, widthAlongClamped, widthAlongDesired, angleSign }
+        for (const wall of WALLS) {
+            const wdx = wall.end.x - wall.start.x;
+            const wdy = wall.end.y - wall.start.y;
+            const wlen = Math.hypot(wdx, wdy);
+            if (wlen < 1e-6) continue;
+            const ux = wdx / wlen, uy = wdy / wlen; // along-wall unit
+            const vx = -uy, vy = ux; // perpendicular unit
+
+            // projections of corners along wall (s) and perpendicular (p)
+            let sMin = Infinity, sMax = -Infinity;
+            for (const P of pts) {
+                const rx = P.x - wall.start.x, ry = P.y - wall.start.y;
+                const s = rx * ux + ry * uy;
+                if (s < sMin) sMin = s;
+                if (s > sMax) sMax = s;
+            }
+
+            // center projection and closest point on wall
+            const rcx = center.x - wall.start.x, rcy = center.y - wall.start.y;
+            const sCenter = rcx * ux + rcy * uy;
+            const pCenter = rcx * vx + rcy * vy;
+            const t = Math.max(0, Math.min(wlen, sCenter));
+            const closest = { x: wall.start.x + ux * t, y: wall.start.y + uy * t };
+
+            // Distance from center to the wall segment
+            const perpDist = Math.hypot(center.x - closest.x, center.y - closest.y);
+
+            // Desired width: doors use standard; windows use bounds projection clamped to wall extents
+            const clamp = (v) => Math.max(0, Math.min(wlen, v));
+            const sMinC = clamp(sMin);
+            const sMaxC = clamp(sMax);
+            const widthAlongClamped = Math.max(0, sMaxC - sMinC);
+            const widthAlongDesired = (item.type === 'simple') ? standardDoorWidthPx : widthAlongClamped;
+
+            const angleSign = (pCenter > 0) ? 1 : 0;
+            const candidate = { wall, pos: { x: closest.x, y: closest.y, wall }, widthAlongClamped, widthAlongDesired, angleSign, score: perpDist };
+            if (!best || candidate.score < best.score) best = candidate;
+        }
+
+        if (!best) continue; // no walls available
+
+        // Build the in-wall object
+        try {
+            const wall = best.wall;
+            const angleDeg = qSVG.angleDeg(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+            // Use standardized width for doors; clamped bounds width for windows
+            const sizeForObj = best.widthAlongDesired;
+            const obj = new editor.obj2D('inWall', 'doorWindow', item.type, best.pos, 0, 0, sizeForObj, 'normal', wall.thick);
+
+            let finalAngle = angleDeg;
+            let sign = 0;
+            if (best.angleSign === 1) { finalAngle += 180; sign = 1; }
+
+            obj.x = best.pos.x;
+            obj.y = best.pos.y;
+            obj.angle = finalAngle;
+            obj.angleSign = sign;
+
+            // Limits along the wall
+            const limits = limitObj(wall.equations.base, obj.size, best.pos);
+            if (Array.isArray(limits)) {
+                // verify both points are on the segment
+                const onSeg = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+                if (onSeg(limits[0]) && onSeg(limits[1])) {
+                    obj.limit = limits;
+                    // SNAP: set position exactly to the midpoint of the limits on the wall
+                    const mid = qSVG.middle(limits[0].x, limits[0].y, limits[1].x, limits[1].y);
+                    obj.x = mid.x;
+                    obj.y = mid.y;
+                }
+            }
+
+            OBJDATA.push(obj);
+            if (typeof $ !== 'undefined') {
+                $('#boxcarpentry').append(obj.graph);
+            }
+            obj.update();
+        } catch (e) {
+            console.warn('Failed to create opening object:', e);
+        }
+    }
+
+    // Refresh ribbons/indicators
+    if (typeof rib === 'function') rib();
 }
 
 /**
@@ -307,10 +452,10 @@ function exportFloorplanCustom(options = {}) {
 
         // Restore wall references
         for (let k in WALLS) {
-            if (WALLS[k].child != null && typeof WALLS[k].child === 'number') {
+            if (WALLS[k].child !== null && typeof WALLS[k].child === 'number') {
                 WALLS[k].child = WALLS[WALLS[k].child];
             }
-            if (WALLS[k].parent != null && typeof WALLS[k].parent === 'number') {
+            if (WALLS[k].parent !== null && typeof WALLS[k].parent === 'number') {
                 WALLS[k].parent = WALLS[WALLS[k].parent];
             }
         }
@@ -370,10 +515,10 @@ function getFloorplanJSON(includeMetadata = true) {
 
         // Restore wall references
         for (let k in WALLS) {
-            if (WALLS[k].child != null && typeof WALLS[k].child === 'number') {
+            if (WALLS[k].child !== null && typeof WALLS[k].child === 'number') {
                 WALLS[k].child = WALLS[WALLS[k].child];
             }
-            if (WALLS[k].parent != null && typeof WALLS[k].parent === 'number') {
+            if (WALLS[k].parent !== null && typeof WALLS[k].parent === 'number') {
                 WALLS[k].parent = WALLS[WALLS[k].parent];
             }
         }
@@ -433,6 +578,9 @@ function importFloorplanJSON(file) {
                     console.log('Floorplan imported successfully');
                     if (typeof $('#boxinfo') !== 'undefined') {
                         $('#boxinfo').html('Floorplan imported successfully!');
+                    }
+                    if (typeof fonc_button === 'function') {
+                        try { fonc_button('select_mode'); } catch (e) { /* noop */ }
                     }
                     resolve(true);
                 } else {
@@ -1078,10 +1226,10 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         const blenderData = {
             wall_height: wallHeight,
             wall_thickness: wallThickness,
-            main: [],
+            floors: [],
             walls: [],
-            doors: [],
-            windows: []
+            doors: { asset: 'ClemontDoor', points: [] },
+            windows: { asset: 'ClemontWindow', points: [] }
         };
 
         // First pass: collect all coordinates to calculate extents
@@ -1154,8 +1302,8 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         console.log(`Floorplan extents: X[${minX.toFixed(2)}, ${maxX.toFixed(2)}], Y[${minY.toFixed(2)}, ${maxY.toFixed(2)}]`);
         console.log(`Center offset: [${centerX.toFixed(2)}, ${centerY.toFixed(2)}]`);
 
-        // Convert rooms to main polygons
-        // Each room becomes a polygon of [x, y] coordinates
+        // Convert rooms to floors array
+        // Each room becomes an object with materials and a polygon of [x, y] coordinates
         for (let i = 0; i < ROOM.length; i++) {
             const room = ROOM[i];
             if (room.coords && room.coords.length > 0) {
@@ -1168,8 +1316,18 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                     const y = parseFloat(((coord.y / 60) - centerY).toFixed(2));
                     roomPolygon.push([x, y]);
                 }
+                // Ensure polygon is closed (last point equals first)
                 if (roomPolygon.length > 0) {
-                    blenderData.main.push(roomPolygon);
+                    const first = roomPolygon[0];
+                    const last = roomPolygon[roomPolygon.length - 1];
+                    if (first[0] !== last[0] || first[1] !== last[1]) {
+                        roomPolygon.push([first[0], first[1]]);
+                    }
+                    blenderData.floors.push({
+                        floor_material: 'WoodFloor',
+                        ceiling_material: 'DefaultCeiling',
+                        points: roomPolygon
+                    });
                 }
             }
         }
@@ -1209,14 +1367,17 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         //     blenderData.internal_outlines = internalOutlines;
         // }
 
-        blenderData.walls = [];
+        // Convert wall outlines into requested object structure
+        blenderData.walls = { material: 'DefaultWall', points: [] };
         
         if (externalOutline && externalOutline.length >= 2) {
-            blenderData.walls.push(externalOutline);
+            blenderData.walls.points.push(externalOutline);
         }
 
         if (internalOutlines && internalOutlines.length > 0) {
-            blenderData.walls.push(...internalOutlines);
+            for (const outline of internalOutlines) {
+                blenderData.walls.points.push(outline);
+            }
         }
 
         // Convert objects (doors and windows) to position arrays
@@ -1250,9 +1411,9 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 
                 // Categorize objects based on their type
                 if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple') {
-                    blenderData.doors.push([x, y]);
+                    blenderData.doors.points.push([x, y]);
                 } else if (obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
-                    blenderData.windows.push([x, y]);
+                    blenderData.windows.points.push([x, y]);
                 }
             }
         }
@@ -1285,20 +1446,20 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 }
 
 /**
- * Classify wall segments into internal vs external using room polygons from blenderData.main.
+ * Classify wall segments into internal vs external using room polygons from blenderData.floors[*].points.
  * A wall is considered INTERNAL if points on both sides of its midpoint lie inside any room polygon.
  * Otherwise it is EXTERNAL.
  *
  * Coordinate system: expects the same centered, meter-scaled coords used by exportForBlender
- *   - blenderData.main: Array of room polygons -> [ [ [x,y], ... ], ... ]
- *   - blenderData.walls: Array of wall segments -> [ [ [x1,y1], [x2,y2] ], ... ]
+ *   - blenderData.floors: Array of floors -> [ { points: [ [x,y], ... ], ... }, ... ]
+ *   - blenderData.walls: Array of wall outlines/segments -> [ [ [x1,y1], [x2,y2] ], ... ] or arrays of points
  *
  * @param {Object} blenderData
  * @param {number} [epsilon=0.2] - Offset distance from midpoint in meters for inside/outside tests
  * @returns {{ internal: Array, external: Array }}
  */
 function classifyWalls(blenderData, epsilon = 0.2) {
-    if (!blenderData || !Array.isArray(blenderData.walls) || !Array.isArray(blenderData.main)) {
+    if (!blenderData || !Array.isArray(blenderData.walls) || !Array.isArray(blenderData.floors)) {
         console.warn('classifyWalls: Invalid blenderData structure.');
         return { internal: [], external: blenderData && blenderData.walls ? [...blenderData.walls] : [] };
     }
@@ -1318,8 +1479,9 @@ function classifyWalls(blenderData, epsilon = 0.2) {
     }
 
     function insideAnyRoom(pt) {
-        for (let k = 0; k < blenderData.main.length; k++) {
-            const poly = blenderData.main[k];
+        for (let k = 0; k < blenderData.floors.length; k++) {
+            const floor = blenderData.floors[k];
+            const poly = floor && Array.isArray(floor.points) ? floor.points : null;
             if (Array.isArray(poly) && poly.length >= 3 && pointInPolygon(pt, poly)) {
                 return true;
             }
