@@ -1274,8 +1274,9 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             wall_thickness: wallThickness,
             floors: [],
             walls: [],
-            doors: { asset: 'ClemontDoor', points: [] },
-            windows: { asset: 'ClemontWindow', points: [] }
+            doors: [],
+            windows: [],
+            styles: []
         };
 
         // First pass: collect all coordinates to calculate extents
@@ -1336,6 +1337,18 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                 // Only include doors and windows in extent calculation
                 if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple' ||
                     obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
+                    updateExtents(x, y);
+                }
+            }
+        }
+
+        // Calculate extents from furniture items
+        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
+            for (let i = 0; i < FURNITURE_ITEMS.length; i++) {
+                const furniture = FURNITURE_ITEMS[i];
+                if (furniture.x !== undefined && furniture.y !== undefined) {
+                    const x = furniture.x / 60;
+                    const y = furniture.y / 60;
                     updateExtents(x, y);
                 }
             }
@@ -1414,19 +1427,32 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         // }
 
         // Convert wall outlines into requested object structure
-        blenderData.walls = { material: 'DefaultWall', points: [] };
+        blenderData.walls = [];
+        
+        // Create wall object with all outlines
+        const wallObject = {
+            material: "Walls",
+            trim: "SquareTrim", 
+            trim_material: "Walls",
+            points: []
+        };
         
         if (externalOutline && externalOutline.length >= 2) {
-            blenderData.walls.points.push(externalOutline);
+            wallObject.points.push(externalOutline);
         }
 
         if (internalOutlines && internalOutlines.length > 0) {
             for (const outline of internalOutlines) {
-                blenderData.walls.points.push(outline);
+                wallObject.points.push(outline);
             }
         }
+        
+        // Only add wall object if it has points
+        if (wallObject.points.length > 0) {
+            blenderData.walls.push(wallObject);
+        }
 
-        // Convert objects (doors and windows) to position arrays
+        // Convert objects (doors and windows) to individual objects with asset, position, and rotation
         for (let i = 0; i < OBJDATA.length; i++) {
             const obj = OBJDATA[i];
             if (obj.x !== undefined && obj.y !== undefined) {
@@ -1434,22 +1460,22 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                 let y = parseFloat((obj.y / 60).toFixed(2));
                 
                 // Adjust position based on angle property
-                if (obj.angle !== undefined) {
-                    const angle = obj.angle;
-                    if (angle === 90) {
-                        x += 0.1;
-                    } else if (angle === 270) {
-                        x -= 0.1;
-                    } else if (angle === 180) {
-                        y += 0.1;
-                    } else if (angle === 0) {
-                        y -= 0.1;
-                    }
+                // if (obj.angle !== undefined) {
+                //     const angle = obj.angle;
+                //     if (angle === 90) {
+                //         x += 0.1;
+                //     } else if (angle === 270) {
+                //         x -= 0.1;
+                //     } else if (angle === 180) {
+                //         y += 0.1;
+                //     } else if (angle === 0) {
+                //         y -= 0.1;
+                //     }
                     
-                    // Round to 2 decimal places after adjustment
-                    x = parseFloat(x.toFixed(2));
-                    y = parseFloat(y.toFixed(2));
-                }
+                //     // Round to 2 decimal places after adjustment
+                //     x = parseFloat(x.toFixed(2));
+                //     y = parseFloat(y.toFixed(2));
+                // }
 
                 // Apply center offset to position coordinates
                 x = parseFloat((x - centerX).toFixed(2));
@@ -1457,11 +1483,62 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 
                 // Categorize objects based on their type
                 if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple') {
-                    blenderData.doors.points.push([x, y]);
+                    blenderData.doors.push({
+                        asset: 'OpenDoor',
+                        position: [x, y],
+                        rotation: obj.angle || 0
+                    });
                 } else if (obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
-                    blenderData.windows.points.push([x, y]);
+                    blenderData.windows.push({
+                        asset: 'WindowPanel',
+                        position: [x, y],
+                        rotation: obj.angle || 0
+                    });
                 }
             }
+        }
+
+        // Convert furniture items to Blender format and wrap in styles
+        const furnitureArray = [];
+        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
+            for (let i = 0; i < FURNITURE_ITEMS.length; i++) {
+                const furniture = FURNITURE_ITEMS[i];
+                if (furniture.x !== undefined && furniture.y !== undefined) {
+                    // Convert position from pixels to meters and apply center offset
+                    const x = parseFloat(((furniture.x / 60) - centerX).toFixed(1));
+                    const y = parseFloat(((furniture.y / 60) - centerY).toFixed(1));
+                    
+                    // Get rotation (default to 0 if not specified)
+                    const rotation = (-furniture.rotation || 0) - 90;
+                    
+                    // Get on_ceiling property from furniture definition
+                    let onCeiling = false;
+                    if (typeof FURNITURE_DATA !== 'undefined' && Array.isArray(FURNITURE_DATA)) {
+                        const furnitureType = FURNITURE_DATA.find(f => f.id === furniture.furnitureId || f.type === furniture.type);
+                        if (furnitureType && furnitureType.on_ceiling !== undefined) {
+                            onCeiling = furnitureType.on_ceiling;
+                        }
+                    }
+                    
+                    // Use furnitureId as asset identifier, fallback to type if not available
+                    const asset = furniture.furnitureId || furniture.type || 'unknown';
+                    
+                    furnitureArray.push({
+                        asset: asset,
+                        position: [x, y],
+                        rotation: rotation,
+                        on_ceiling: onCeiling
+                    });
+                }
+            }
+        }
+        
+        // Wrap furniture in styles structure
+        if (furnitureArray.length > 0) {
+            blenderData.styles.push({
+                name: "furnished",
+                furniture: furnitureArray
+            });
         }
 
         // Convert to JSON string with custom formatting for compact coordinate arrays

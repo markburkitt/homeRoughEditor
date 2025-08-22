@@ -274,7 +274,7 @@ function save(boot = false) {
             WALLS[k].parent = WALLS.indexOf(WALLS[k].parent);
         }
     }
-    if (JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM }) === HISTORY[HISTORY.length - 1]) {
+    if (JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData() }) === HISTORY[HISTORY.length - 1]) {
         for (let k in WALLS) {
             if (WALLS[k].child != null) {
                 WALLS[k].child = WALLS[WALLS[k].child];
@@ -290,7 +290,7 @@ function save(boot = false) {
         HISTORY.splice(HISTORY.index, (HISTORY.length - HISTORY.index));
         $('#redo').addClass('disabled');
     }
-    HISTORY.push(JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM }));
+    HISTORY.push(JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData() }));
     localStorage.setItem('history', JSON.stringify(HISTORY));
     HISTORY.index++;
     if (HISTORY.index > 1) $('#undo').removeClass('disabled');
@@ -337,6 +337,10 @@ function load(index = HISTORY.index, boot = false) {
         }
     }
     ROOM = historyTemp.roomData;
+    // Load furniture data if it exists
+    if (historyTemp.furnitureData) {
+        loadSavedFurnitureData(historyTemp.furnitureData);
+    }
     editor.architect(WALLS);
     editor.showScaleBox();
     rib();

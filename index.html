@@ -340,6 +340,36 @@
     <br />
   </div>
 
+  <div id="furniturePanel" class="leftBox">
+    <h2>Furniture Placement</h2>
+    <hr />
+    <p>Select furniture to place:</p>
+    <div id="furniture_options" style="max-height: 400px; overflow-y: auto;">
+      <!-- Furniture options will be populated here -->
+    </div>
+    <hr />
+    <button class="btn btn-info fully" onclick="exitFurnitureMode();">
+      <i class="fa fa-backward" aria-hidden="true"></i> Back to Selection
+    </button>
+  </div>
+
+  <div id="furnitureTools" class="leftBox">
+    <h2>Furniture Details</h2>
+    <hr />
+    <div id="furnitureDetails">
+      <p><strong>Name:</strong> <span id="furnitureName"></span></p>
+      <p><strong>Type:</strong> <span id="furnitureType"></span></p>
+      <p><strong>ID:</strong> <span id="furnitureId"></span></p>
+      <p><strong>Rotation:</strong> <span id="furnitureRotationValue">0</span>°</p>
+      <input type="range" id="furnitureRotationSlider" min="-180" max="180" value="0" step="1" class="range" style="width: 100%; margin: 10px 0;" />
+    </div>
+    <br />
+    <button class="btn btn-danger fully" id="furnitureRemove"><i class="fa fa-2x fa-trash" aria-hidden="true"></i></button>
+    <button class="btn btn-info" style="margin-top:50px"
+      onclick="hideFurnitureTools();"><i
+        class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
+  </div>
+
   <div id="backgroundImageTools" class="leftBox">
     <h2>Background Image Settings</h2>
     <hr />
@@ -459,7 +489,7 @@
       </div>
       <li><button class="btn btn-light shadow fully " id="object_mode" style="display:none"
           onclick="$('.sub').hide();$('#energy_list').toggle(200);">ENERGY</button></li>
-      <!-- <li><button class="btn btn-light shadow fully " id="object_mode" onclick="$('.sub').hide();$('#object_list').toggle(200);">FURNITURE</button></li> -->
+      <li><button class="btn btn-light shadow fully " id="furniture_mode" onclick="enterFurnitureMode();">FURNITURE</button></li>
       <br />
 
       <li><button class="btn btn-light shadow fully " id="layer_mode"
@@ -497,6 +527,19 @@
             <label for="showLayerBackground">Background Image</label>
           </div>
         </div>
+        <div class="funkyradio" style="font-size:0.8em">
+          <div class="funkyradio-info">
+            <input type="checkbox" id="showLayerFurniture" checked />
+            <label for="showLayerFurniture">Furniture</label>
+          </div>
+        </div>
+      </div>
+      
+      <div id="furniture_list" class="list-unstyled sub"
+        style="box-shadow:2px 2px 3px #ccc;display:none;background:#fff;border-radius: 0 5px 5px 0; padding:10px;position:absolute;left:200px;width:300px;max-height:400px;overflow-y:auto">
+        <h5>Select Furniture</h5>
+        <div id="furniture_options"></div>
+        <button class="btn btn-secondary fully" onclick="closeFurnitureMode();">Close Furniture Mode</button>
       </div>
       <br />
       <div id="export_list" class="list-unstyled sub"
@@ -660,10 +703,11 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.min.js"
   integrity="sha384-IDwe1+LCz02ROU9k972gdyvl+AESN10+x7tBKgc9I5HFtuNz0wWnPclzo6p9vxnk" crossorigin="anonymous"></script>
 <script src="mousewheel.js"></script>
-<script src="func.js"></script>
 <script src="qSVG.js"></script>
-<script src="editor.js"></script>
+<script src="func.js"></script>
 <script src="engine.js"></script>
+<script src="editor.js"></script>
 <script src="export.js"></script>
+<script src="furniture.js"></script>
 
 </html>

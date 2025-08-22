@@ -1,0 +1,119 @@
+{
+    "furniture": [
+      {
+        "id": "AtlasCounterStool",
+        "name": "Atlas Counter Stool",
+        "on_ceiling": false
+      },
+      {
+        "id": "BavelLeatherLoungeChair",
+        "name": "Bavel Leather Lounge Chair",
+        "on_ceiling": false
+      },
+      {
+        "id": "CarveSquareSideTable",
+        "name": "Carve Square Side Table",
+        "on_ceiling": false
+      },
+      {
+        "id": "CeilingSpotlight",
+        "name": "Ceiling Spotlight",
+        "on_ceiling": true
+      },
+      {
+        "id": "DIANAQueenBed",
+        "name": "DIANA Queen Bed",
+        "on_ceiling": false
+      },
+      {
+        "id": "DorsetCredenza",
+        "name": "Dorset Credenza",
+        "on_ceiling": false
+      },
+      {
+        "id": "EmeryRug",
+        "name": "Emery Rug",
+        "on_ceiling": false
+      },
+      {
+        "id": "FloatingDiscsSideTable",
+        "name": "Floating Discs Side Table",
+        "on_ceiling": false
+      },
+      {
+        "id": "Fridge",
+        "name": "Fridge",
+        "on_ceiling": false
+      },
+      {
+        "id": "KitchenIsland",
+        "name": "Kitchen Island",
+        "on_ceiling": false
+      },
+      {
+        "id": "MUIRCamelSofa",
+        "name": "MUIR Camel Sofa",
+        "on_ceiling": false
+      },
+      {
+        "id": "PAVO Floor Lamp",
+        "name": "PAVO Floor Lamp",
+        "on_ceiling": false
+      },
+      {
+        "id": "Plant02",
+        "name": "Plant02",
+        "on_ceiling": false
+      },
+      {
+        "id": "RoccaNightStand",
+        "name": "Rocca Night Stand",
+        "on_ceiling": false
+      },
+      {
+        "id": "RyleighRug",
+        "name": "Ryleigh Rug",
+        "on_ceiling": false
+      },
+      {
+        "id": "Stove",
+        "name": "Stove",
+        "on_ceiling": false
+      },
+      {
+        "id": "TessoBookshelf",
+        "name": "Tesso Bookshelf",
+        "on_ceiling": false
+      },
+      {
+        "id": "VireoWalnutDresser",
+        "name": "Vireo Walnut Dresser",
+        "on_ceiling": false
+      },
+      {
+        "id": "WasherAndDryer",
+        "name": "Washer And Dryer",
+        "on_ceiling": false
+      }
+    ],
+    "trim": [
+      {
+        "id": "SquareTrim",
+        "name": "Square Trim"
+      }
+    ],
+    "doorsandwindows": [
+      {
+        "id": "ClosedDoor",
+        "name": "Closed Door"
+      },
+      {
+        "id": "OpenDoor",
+        "name": "Open Door"
+      },
+      {
+        "id": "WindowPanel",
+        "name": "Window Panel"
+      }
+    ]
+  }

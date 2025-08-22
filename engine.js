@@ -579,6 +579,16 @@ function _MOUSEMOVE(event) {
     }
   } // END mode == 'select_mode' && drag == 'off'
 
+  //**************************************************************************
+  //**************        FURNITURE PLACEMENT MODE ***************************
+  //**************************************************************************
+  
+  if (mode == 'furniture_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    updateFurnitureCursor(snap.x, snap.y);
+    cursor('none');
+  }
+
   // ------------------------------  LINE MODE ------------------------------------------------------
 
   if ((mode == 'line_mode' || mode == 'partition_mode') && action == 0) {
@@ -1170,6 +1180,16 @@ function _MOUSEDOWN(event) {
   if (mode == 'edit_door_mode') { // ACTION 1 ACTIVATE EDITION OF THE DOOR
     action = 1;
     $('#lin').css('cursor', 'pointer');
+  }
+
+  // *******************************************************************
+  // ********************   FURNITURE PLACEMENT MODE   ****************
+  // *******************************************************************
+  if (mode == 'furniture_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    placeFurnitureItem(snap.x, snap.y);
+    event.stopPropagation();
+    return;
   }
 
   // *******************************************************************
