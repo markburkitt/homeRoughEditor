@@ -3,6 +3,9 @@ let FURNITURE_DATA = [];
 let FURNITURE_ITEMS = [];
 let selectedFurnitureType = null;
 let furnitureCursor = null;
+let draggingFurnitureItem = null;
+let draggingFurnitureOffset = { dx: 0, dy: 0 };
+let furnitureDragSaveTimeout = null;
 
 // Enter furniture placement mode
 async function enterFurnitureMode() {
@@ -158,15 +161,18 @@ function placeFurnitureItem(x, y, skipSave = false) {
         x: x,
         y: y,
         rotation: 0,
-        graph: null
+        graph: null,
+        rotGroup: null,
+        label: null
     };
     
-    // Create visual representation
+    // Create visual representation (outer group translates, inner group rotates)
     const furnitureGroup = qSVG.create('boxFurniture', 'g', {
         id: 'furniture-' + furnitureItem.id,
         class: 'furniture-item',
         'data-furniture-id': furnitureItem.id
     });
+    const furnitureRotGroup = qSVG.create('none', 'g', { class: 'furniture-rot' });
     
     // Create furniture icon (square with arrow)
     const icon = qSVG.create('none', 'rect', {
@@ -190,32 +196,68 @@ function placeFurnitureItem(x, y, skipSave = false) {
     // Create text label
     const label = qSVG.create('none', 'text', {
         x: 0,
-        y: 35,
+        y: 39,
         'text-anchor': 'middle',
         'font-family': 'roboto',
-        'font-size': '12px',
-        fill: '#333',
-        'font-weight': 'bold'
+        'font-size': '10px',
+        fill: '#777',
+        'font-weight': 'normal'
     });
-    label.textContent = furnitureItem.name;
+    label.text((furnitureItem.name || '').toLowerCase());
     
-    furnitureGroup.append(icon);
-    furnitureGroup.append(arrow);
+    furnitureRotGroup.append(icon);
+    furnitureRotGroup.append(arrow);
+    furnitureGroup.append(furnitureRotGroup);
     furnitureGroup.append(label);
     
     furnitureGroup.attr({
-        transform: `translate(${x}, ${y}) rotate(${furnitureItem.rotation})`
+        transform: `translate(${x}, ${y})`
+    });
+    furnitureRotGroup.attr({
+        transform: `rotate(${furnitureItem.rotation})`
     });
     
     furnitureItem.graph = furnitureGroup;
+    furnitureItem.rotGroup = furnitureRotGroup;
+    // Keep a reference to the label for future updates (e.g., on restore)
+    furnitureItem.label = label;
     FURNITURE_ITEMS.push(furnitureItem);
     
-    // Add click handler for selection (only in furniture mode)
+    // Add click handler for selection (only in furniture modes)
     furnitureGroup.on('click', function(e) {
         e.stopPropagation();
         if (mode === 'furniture_mode' || mode === 'furniture_placement_mode') {
             selectFurnitureItem(furnitureItem);
         }
+    });
+
+    // Add mousedown handler to start drag only if this item is selected
+    furnitureGroup.on('mousedown', function(e) {
+        // Do not allow dragging during placement mode
+        if (mode === 'furniture_placement_mode') return;
+        // Only start dragging if this item is currently selected
+        if (window.selectedFurnitureItem !== furnitureItem) return;
+        e.preventDefault();
+        e.stopPropagation();
+        // Use existing snap helper to get SVG coords if available
+        try {
+            const snap = calcul_snap(e, 'off');
+            draggingFurnitureOffset.dx = furnitureItem.x - snap.x;
+            draggingFurnitureOffset.dy = furnitureItem.y - snap.y;
+        } catch (err) {
+            // Fallback: no offset, will jump under cursor
+            draggingFurnitureOffset.dx = 0;
+            draggingFurnitureOffset.dy = 0;
+        }
+        draggingFurnitureItem = furnitureItem;
+        window.draggingFurnitureItem = furnitureItem;
+        // Temporarily switch to furniture_mode to prevent select-mode panning
+        window._prevModeBeforeFurnitureDrag = mode;
+        mode = 'furniture_mode';
+        // Ensure engine's panning is disabled even if it set drag='on' in capture phase
+        try { window.drag = 'off'; } catch (_) {}
+        $('#boxinfo').html('Dragging ' + furnitureItem.name + ' (release to drop)');
+        cursor('move');
     });
     
     $('#boxinfo').html('Placed ' + furnitureItem.name);
@@ -250,7 +292,8 @@ function generateFurnitureId() {
 
 // Select furniture item for editing
 function selectFurnitureItem(furnitureItem) {
-    mode = 'select_mode';
+    // Stay in furniture_mode while a furniture item is selected to avoid wall interactions
+    mode = 'furniture_mode';
     selectedFurnitureType = null;
     
     // Hide all panels first
@@ -340,10 +383,17 @@ async function initFurnitureSystem() {
             window.selectedFurnitureItem.rotation = rotation;
             $('#furnitureRotationValue').text(rotation);
             
-            // Apply rotation to the furniture item immediately for smooth visual feedback
-            window.selectedFurnitureItem.graph.attr({
-                transform: `translate(${window.selectedFurnitureItem.x}, ${window.selectedFurnitureItem.y}) rotate(${rotation})`
-            });
+            // Apply transform split: translate on outer group, rotate on inner group
+            if (window.selectedFurnitureItem.graph) {
+                window.selectedFurnitureItem.graph.attr({
+                    transform: `translate(${window.selectedFurnitureItem.x}, ${window.selectedFurnitureItem.y})`
+                });
+            }
+            if (window.selectedFurnitureItem.rotGroup) {
+                window.selectedFurnitureItem.rotGroup.attr({
+                    transform: `rotate(${rotation})`
+                });
+            }
             
             // Throttle save operations to avoid excessive calls
             clearTimeout(rotationTimeout);
@@ -357,6 +407,63 @@ async function initFurnitureSystem() {
     document.getElementById('showLayerFurniture').addEventListener('change', function() {
         toggleFurnitureLayer(this.checked);
     });
+
+    // Global mousemove/up handlers for dragging furniture
+    document.addEventListener('mousemove', function(e) {
+        if (!draggingFurnitureItem) return;
+        // Do not drag during placement mode, but allow in other modes (e.g., select_mode)
+        if (mode === 'furniture_placement_mode') return;
+        let snap;
+        try {
+            snap = calcul_snap(e, 'off');
+        } catch (err) {
+            // If calcul_snap is unavailable, approximate using client coords relative to SVG viewBox
+            const svg = document.getElementById('lin');
+            if (!svg) return;
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX;
+            pt.y = e.clientY;
+            const ctm = svg.getScreenCTM();
+            if (!ctm) return;
+            const inv = ctm.inverse();
+            const p = pt.matrixTransform(inv);
+            snap = { x: p.x, y: p.y };
+        }
+        const nx = snap.x + draggingFurnitureOffset.dx;
+        const ny = snap.y + draggingFurnitureOffset.dy;
+        draggingFurnitureItem.x = nx;
+        draggingFurnitureItem.y = ny;
+        if (draggingFurnitureItem.graph) {
+            draggingFurnitureItem.graph.attr({
+                transform: `translate(${nx}, ${ny})`
+            });
+        }
+        if (draggingFurnitureItem.rotGroup) {
+            draggingFurnitureItem.rotGroup.attr({
+                transform: `rotate(${draggingFurnitureItem.rotation || 0})`
+            });
+        }
+        // Throttle saves while dragging
+        clearTimeout(furnitureDragSaveTimeout);
+        furnitureDragSaveTimeout = setTimeout(() => { try { save(); } catch (e) {} }, 150);
+    }, true);
+
+    document.addEventListener('mouseup', function() {
+        if (!draggingFurnitureItem) return;
+        const justDropped = draggingFurnitureItem;
+        draggingFurnitureItem = null;
+        window.draggingFurnitureItem = null;
+        // Restore previous mode after drag ends
+        if (window._prevModeBeforeFurnitureDrag) {
+            mode = window._prevModeBeforeFurnitureDrag;
+            window._prevModeBeforeFurnitureDrag = null;
+        }
+        cursor('default');
+        try { save(); } catch (e) {}
+        if (justDropped) {
+            $('#boxinfo').html('Placed ' + justDropped.name);
+        }
+    }, true);
 }
 
 // Export furniture data for save/load functionality
@@ -413,10 +520,40 @@ async function loadSavedFurnitureData(furnitureData) {
                     
                     console.log('Setting rotation to:', item.rotation);
                     
-                    // Update visual representation with proper rotation
-                    item.graph.attr({
-                        transform: `translate(${item.x}, ${item.y}) rotate(${item.rotation})`
-                    });
+                    // Update visual representation: translate outer group, rotate inner group
+                    if (item.graph) {
+                        item.graph.attr({
+                            transform: `translate(${item.x}, ${item.y})`
+                        });
+                    }
+                    if (item.rotGroup) {
+                        item.rotGroup.attr({
+                            transform: `rotate(${item.rotation})`
+                        });
+                    } else {
+                        // Fallback: find rot group if restoring from older session
+                        const g = item.graph && item.graph.get ? item.graph.get(0) : null;
+                        if (g) {
+                            const rg = g.querySelector('g.furniture-rot');
+                            if (rg) {
+                                $(rg).attr('transform', `rotate(${item.rotation})`);
+                                item.rotGroup = $(rg);
+                            }
+                        }
+                    }
+                    // Update label text to match restored name
+                    try {
+                        if (item.label) {
+                            item.label.text((item.name || '').toLowerCase());
+                        } else {
+                            // Fallback: find first text element inside group
+                            const g = item.graph && item.graph.get ? item.graph.get(0) : null;
+                            if (g) {
+                                const t = g.querySelector('text');
+                                if (t) t.textContent = (item.name || '').toLowerCase();
+                            }
+                        }
+                    } catch (e) {}
                 } else {
                     console.warn('Failed to create furniture item:', data);
                 }

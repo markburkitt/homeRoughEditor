@@ -1124,7 +1124,7 @@ function _MOUSEMOVE(event) {
     document.getElementById('backgroundImageTools').style.display !== 'none' &&
     window.getComputedStyle(document.getElementById('backgroundImageTools')).display !== 'none';
 
-  if (mode == 'select_mode' && drag == 'on' && !backgroundImageToolsOpen) {
+  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode') && drag == 'on' && !backgroundImageToolsOpen && !window.draggingFurnitureItem) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
     distX = (snap.xMouse - pox) * factor;
@@ -1187,9 +1187,32 @@ function _MOUSEDOWN(event) {
   // *******************************************************************
   if (mode == 'furniture_placement_mode') {
     snap = calcul_snap(event, grid_snap);
-    placeFurnitureItem(snap.x, snap.y);
+    // Begin potential panning; defer placement to mouseup if it's a click (not a drag)
+    drag = 'on';
+    pox = snap.xMouse;
+    poy = snap.yMouse;
+    // Remember initial position for click detection
+    window._pendingFurniturePlacement = { x: snap.x, y: snap.y, xMouse: snap.xMouse, yMouse: snap.yMouse };
     event.stopPropagation();
     return;
+  }
+
+  // *******************************************************************
+  // ********************   FURNITURE MODE (PAN)   ********************
+  // *******************************************************************
+  if (mode == 'furniture_mode') {
+    // Start panning on mousedown in furniture mode (unless background tools block)
+    const bgTools = document.getElementById('backgroundImageTools') &&
+      document.getElementById('backgroundImageTools').style.display !== 'none' &&
+      window.getComputedStyle(document.getElementById('backgroundImageTools')).display !== 'none';
+    // Avoid starting pan when clicking on a furniture item (drag is handled in furniture.js)
+    const overFurniture = event.target && (event.target.closest && event.target.closest('.furniture-item'));
+    if (!bgTools && !overFurniture) {
+      snap = calcul_snap(event, grid_snap);
+      drag = 'on';
+      pox = snap.xMouse;
+      poy = snap.yMouse;
+    }
   }
 
   // *******************************************************************
@@ -1425,6 +1448,22 @@ function _MOUSEUP(event) {
   if (showRib) $('#boxScale').show(200);
   drag = 'off';
   cursor('default');
+
+  // Handle deferred placement from furniture_placement_mode
+  if (window._pendingFurniturePlacement) {
+    try {
+      const snapUp = calcul_snap(event, grid_snap);
+      const dx = Math.abs(snapUp.xMouse - window._pendingFurniturePlacement.xMouse);
+      const dy = Math.abs(snapUp.yMouse - window._pendingFurniturePlacement.yMouse);
+      const moved = Math.sqrt(dx*dx + dy*dy);
+      if (moved < 5 && mode === 'furniture_placement_mode') {
+        // Consider it a click: place furniture at original snapped coords
+        placeFurnitureItem(window._pendingFurniturePlacement.x, window._pendingFurniturePlacement.y);
+      }
+    } catch (_) { /* no-op */ }
+    window._pendingFurniturePlacement = null;
+  }
+
   if (mode == 'select_mode') {
     if (typeof (binder) != 'undefined') {
       binder.remove();
