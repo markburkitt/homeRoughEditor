@@ -2545,3 +2545,108 @@ document.getElementById('import_image_mode').addEventListener('click', function(
         });
     }
 })();
+
+// Combined Import (JSON + Image) modal handlers
+(function(){
+    const jsonInput = document.getElementById('combined_json_input');
+    const imageInput = document.getElementById('combined_image_input');
+    const importBtn = document.getElementById('combined_import_btn');
+    const jsonName = document.getElementById('combined_json_name');
+    const imageName = document.getElementById('combined_image_name');
+    const errMsg = document.getElementById('combined_error_msg');
+    const okMsg = document.getElementById('combined_success_msg');
+
+    if (!(jsonInput && imageInput && importBtn)) return; // Modal not present
+
+    function resetMessages() {
+        if (errMsg) errMsg.textContent = '';
+        if (okMsg) okMsg.textContent = '';
+    }
+
+    function validateEnable() {
+        const jf = jsonInput.files && jsonInput.files[0];
+        const imf = imageInput.files && imageInput.files[0];
+        let ok = true;
+        resetMessages();
+        if (jf) {
+            const validJson = /\.json$/i.test(jf.name);
+            if (!validJson) { ok = false; if (errMsg) errMsg.textContent = 'Selected JSON file is not a .json'; }
+        } else { ok = false; }
+        if (imf) {
+            const validImg = /\.(png|jpe?g)$/i.test(imf.name);
+            if (!validImg) { ok = false; if (errMsg) errMsg.textContent = 'Selected image must be PNG or JPG'; }
+        } else { ok = false; }
+        importBtn.disabled = !ok;
+    }
+
+    jsonInput.addEventListener('change', function(){
+        if (jsonName) jsonName.textContent = this.files[0] ? this.files[0].name : '';
+        validateEnable();
+    });
+    imageInput.addEventListener('change', function(){
+        if (imageName) imageName.textContent = this.files[0] ? this.files[0].name : '';
+        validateEnable();
+    });
+
+    importBtn.addEventListener('click', async function(){
+        resetMessages();
+
+        // Confirm replacing current work if any
+        try {
+            if ((typeof WALLS !== 'undefined' && WALLS.length) || (typeof OBJDATA !== 'undefined' && OBJDATA.length) || (typeof ROOM !== 'undefined' && ROOM.length)) {
+                if (!confirm('Importing will replace your current floorplan. Continue?')) {
+                    if (typeof $ !== 'undefined') $('#boxinfo').html('Import cancelled');
+                    return;
+                }
+            }
+        } catch(e) { /* ignore */ }
+
+        const jf = jsonInput.files[0];
+        const imf = imageInput.files[0];
+        importBtn.disabled = true;
+        importBtn.textContent = 'Importing...';
+
+        try {
+            // Use AI importer exclusively per request
+            const jsonOk = await (typeof importAIFloorplanJSON === 'function' ? importAIFloorplanJSON(jf) : Promise.resolve(false));
+            if (!jsonOk) {
+                if (errMsg) errMsg.textContent = 'Failed to import floorplan JSON using AI format.';
+                importBtn.textContent = 'Import';
+                validateEnable();
+                return;
+            }
+
+            const imgOk = await (typeof importBackgroundImage === 'function' ? importBackgroundImage(imf) : Promise.resolve(false));
+            if (!imgOk) {
+                if (errMsg) errMsg.textContent = 'Floorplan JSON loaded, but background image import failed.';
+                importBtn.textContent = 'Import';
+                validateEnable();
+                return;
+            }
+
+            if (okMsg) okMsg.textContent = 'Imported successfully!';
+            if (typeof $ !== 'undefined') $('#boxinfo').html('Floorplan and image imported successfully');
+
+            // Close modal after short delay and clear inputs
+            setTimeout(function(){
+                const modalEl = document.getElementById('combinedImportModal');
+                if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const instance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                    instance.hide();
+                }
+                jsonInput.value = '';
+                imageInput.value = '';
+                if (jsonName) jsonName.textContent = '';
+                if (imageName) imageName.textContent = '';
+                importBtn.textContent = 'Import';
+                validateEnable();
+            }, 400);
+        } catch (e) {
+            console.error('Combined import error:', e);
+            if (errMsg) errMsg.textContent = 'Unexpected error during import.';
+            if (typeof $ !== 'undefined') $('#boxinfo').html('Import failed');
+            importBtn.textContent = 'Import';
+            validateEnable();
+        }
+    });
+})();

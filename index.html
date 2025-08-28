@@ -137,6 +137,36 @@
         class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
   </div>
 
+  <!-- Combined Import Modal -->
+  <div class="modal fade" id="combinedImportModal" tabindex="-1" aria-labelledby="combinedImportLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="combinedImportLabel">Import Floorplan JSON + Image</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Floorplan JSON</label>
+            <input type="file" id="combined_json_input" accept=".json" class="form-control" />
+            <small id="combined_json_name" class="form-text text-muted"></small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Background image (PNG, JPG)</label>
+            <input type="file" id="combined_image_input" accept="image/png,image/jpeg,image/jpg" class="form-control" />
+            <small id="combined_image_name" class="form-text text-muted"></small>
+          </div>
+          <div id="combined_error_msg" class="text-danger small"></div>
+          <div id="combined_success_msg" class="text-success small"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="combined_import_btn" disabled>Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="wallTools" class="leftBox">
     <h2 id="titleWallTools">Modify the wall</h2>
     <hr />
@@ -611,6 +641,12 @@
                 onclick="initHistory('newSquare');" data-bs-dismiss="modal" /></div>
             <div class=" boxMouseOver"><img src="img/newPlanL.jpg" class="img-fluid" onclick="initHistory('newL');"
                 data-bs-dismiss="modal" /></div>
+          </div>
+          <hr />
+          <div class="mt-3">
+            <h5>Import existing floorplan (JSON + Image)</h5>
+            <p class="text-muted">Select both your floorplan JSON and its background image to start where you left off.</p>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#combinedImportModal">Import JSON + Image</button>
           </div>
         </div>
         <!-- <div class="modal-footer">
