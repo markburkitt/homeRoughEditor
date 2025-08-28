@@ -3,97 +3,116 @@
       {
         "id": "AtlasCounterStool",
         "name": "Atlas Counter Stool",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "chair"
       },
       {
         "id": "BavelLeatherLoungeChair",
         "name": "Bavel Leather Lounge Chair",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "sofa"
       },
       {
         "id": "CarveSquareSideTable",
         "name": "Carve Square Side Table",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "table"
       },
       {
         "id": "CeilingSpotlight",
         "name": "Ceiling Spotlight",
-        "on_ceiling": true
+        "on_ceiling": true,
+        "category": "light"
       },
       {
         "id": "DIANAQueenBed",
         "name": "DIANA Queen Bed",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "bed"
       },
       {
         "id": "DorsetCredenza",
         "name": "Dorset Credenza",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "EmeryRug",
         "name": "Emery Rug",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "FloatingDiscsSideTable",
         "name": "Floating Discs Side Table",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "table"
       },
       {
         "id": "Fridge",
         "name": "Fridge",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "utility"
       },
       {
         "id": "KitchenIsland",
         "name": "Kitchen Island",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "table"
       },
       {
         "id": "MUIRCamelSofa",
         "name": "MUIR Camel Sofa",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "sofa"
       },
       {
         "id": "PAVO Floor Lamp",
         "name": "PAVO Floor Lamp",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "light"
       },
       {
         "id": "Plant02",
         "name": "Plant02",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "RoccaNightStand",
         "name": "Rocca Night Stand",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "table"
       },
       {
         "id": "RyleighRug",
         "name": "Ryleigh Rug",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "Stove",
         "name": "Stove",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "utility"
       },
       {
         "id": "TessoBookshelf",
         "name": "Tesso Bookshelf",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "VireoWalnutDresser",
         "name": "Vireo Walnut Dresser",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": ""
       },
       {
         "id": "WasherAndDryer",
         "name": "Washer And Dryer",
-        "on_ceiling": false
+        "on_ceiling": false,
+        "category": "utility"
       }
     ],
     "trim": [

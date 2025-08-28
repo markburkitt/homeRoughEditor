@@ -117,21 +117,22 @@ function createFurnitureCursor() {
         id: 'furniture-cursor'
     });
     
-    const square = qSVG.create('none', 'rect', {
-        x: -15,
-        y: -15,
-        width: 30,
-        height: 30,
+    const square = qSVG.create('none', 'circle', {
+        cx: 0,
+        cy: 0,
+        r: 15,
         fill: 'rgba(76, 175, 80, 0.7)',
         stroke: '#4CAF50',
         'stroke-width': 2
     });
     
     const arrow = qSVG.create('none', 'path', {
-        d: 'M-8,-8 L8,0 L-8,8 Z',
+        d: 'M23,0 L17,-5 L17,5 Z',
         fill: '#2E7D32',
         stroke: '#2E7D32',
-        'stroke-width': 1
+        'stroke-width': 1,
+        'stroke-linejoin': 'round',
+        'stroke-linecap': 'round'
     });
     
     furnitureCursor.append(square);
@@ -158,6 +159,7 @@ function placeFurnitureItem(x, y, skipSave = false) {
         type: selectedFurnitureType.type,
         name: selectedFurnitureType.name,
         furnitureId: selectedFurnitureType.id,
+        category: selectedFurnitureType.category || '',
         x: x,
         y: y,
         rotation: 0,
@@ -174,23 +176,23 @@ function placeFurnitureItem(x, y, skipSave = false) {
     });
     const furnitureRotGroup = qSVG.create('none', 'g', { class: 'furniture-rot' });
     
-    // Create furniture icon (square with arrow)
-    const icon = qSVG.create('none', 'rect', {
-        x: -20,
-        y: -20,
-        width: 40,
-        height: 40,
+    // Create furniture icon (circle with arrow)
+    const icon = qSVG.create('none', 'circle', {
+        cx: 0,
+        cy: 0,
+        r: 20,
         fill: '#8BC34A',
         stroke: '#689F38',
-        'stroke-width': 2,
-        rx: 3
+        'stroke-width': 2
     });
     
     const arrow = qSVG.create('none', 'path', {
-        d: 'M-10,-10 L10,0 L-10,10 Z',
+        d: 'M30,0 L22,-6 L22,6 Z',
         fill: '#33691E',
         stroke: '#33691E',
-        'stroke-width': 1
+        'stroke-width': 1,
+        'stroke-linejoin': 'round',
+        'stroke-linecap': 'round'
     });
     
     // Create text label
@@ -209,18 +211,29 @@ function placeFurnitureItem(x, y, skipSave = false) {
     furnitureRotGroup.append(arrow);
     furnitureGroup.append(furnitureRotGroup);
     furnitureGroup.append(label);
-    
+
+    // Assign references BEFORE rendering icon so it can attach to the outer group
+    furnitureItem.graph = furnitureGroup;
+    furnitureItem.rotGroup = furnitureRotGroup;
+    // Keep a reference to the label for future updates (e.g., on restore)
+    furnitureItem.label = label;
+
+    // Ensure category is synced from latest FURNITURE_DATA before rendering icon
+    try {
+        const latest = Array.isArray(FURNITURE_DATA) ? FURNITURE_DATA.find(f => f.id === furnitureItem.furnitureId) : null;
+        if (latest && typeof latest.category !== 'undefined') {
+            furnitureItem.category = latest.category;
+        }
+    } catch (e) {}
+    // Render category icon inside the circle
+    renderFurnitureIcon(furnitureItem);
+
     furnitureGroup.attr({
         transform: `translate(${x}, ${y})`
     });
     furnitureRotGroup.attr({
         transform: `rotate(${furnitureItem.rotation})`
     });
-    
-    furnitureItem.graph = furnitureGroup;
-    furnitureItem.rotGroup = furnitureRotGroup;
-    // Keep a reference to the label for future updates (e.g., on restore)
-    furnitureItem.label = label;
     FURNITURE_ITEMS.push(furnitureItem);
     
     // Add click handler for selection (only in furniture modes)
@@ -260,27 +273,23 @@ function placeFurnitureItem(x, y, skipSave = false) {
         cursor('move');
     });
     
-    $('#boxinfo').html('Placed ' + furnitureItem.name);
-    
-    // Clear selection and reset to furniture mode
-    selectedFurnitureType = null;
-    mode = 'furniture_mode';
-    
-    // Hide furniture cursor
-    if (furnitureCursor) {
-        furnitureCursor.attr('style', 'display: none');
-    }
-    
-    // Reset furniture option buttons
-    document.querySelectorAll('.furniture-option').forEach(btn => {
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-light');
-    });
-    
-    // Ensure furniture panel stays visible
-    $('#furniturePanel').show();
-    
+    // Only update UI state and mode when this is a user placement, not restoration
     if (!skipSave) {
+        $('#boxinfo').html('Placed ' + furnitureItem.name);
+        // Clear selection and reset to furniture mode
+        selectedFurnitureType = null;
+        mode = 'furniture_mode';
+        // Hide furniture cursor
+        if (furnitureCursor) {
+            furnitureCursor.attr('style', 'display: none');
+        }
+        // Reset furniture option buttons
+        document.querySelectorAll('.furniture-option').forEach(btn => {
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-light');
+        });
+        // Ensure furniture panel stays visible
+        $('#furniturePanel').show();
         save();
     }
 }
@@ -301,8 +310,19 @@ function selectFurnitureItem(furnitureItem) {
     
     // Show furniture details panel
     $('#furnitureName').text(furnitureItem.name);
-    $('#furnitureType').text(furnitureItem.type);
     $('#furnitureId').text(furnitureItem.furnitureId);
+    // Always use the latest category from FURNITURE_DATA in case furniture.json changed
+    try {
+        const latest = Array.isArray(FURNITURE_DATA) ? FURNITURE_DATA.find(f => f.id === furnitureItem.furnitureId) : null;
+        let latestCategory = furnitureItem.category || '';
+        if (latest && Object.prototype.hasOwnProperty.call(latest, 'category')) {
+            latestCategory = latest.category; // allow empty string
+        }
+        furnitureItem.category = latestCategory; // keep the item in sync
+        $('#furnitureCategory').text(latestCategory);
+        // Refresh icon according to updated category
+        renderFurnitureIcon(furnitureItem);
+    } catch (e) {}
     $('#furnitureRotationValue').text(furnitureItem.rotation || 0);
     $('#furnitureRotationSlider').val(furnitureItem.rotation || 0);
     
@@ -473,6 +493,7 @@ function getFurnitureData() {
         type: item.type,
         name: item.name,
         furnitureId: item.furnitureId,
+        category: item.category || '',
         x: item.x,
         y: item.y,
         rotation: item.rotation
@@ -516,6 +537,27 @@ async function loadSavedFurnitureData(furnitureData) {
                     item.type = data.type;
                     item.name = data.name;
                     item.furnitureId = data.furnitureId;
+                    // Prefer the latest category from FURNITURE_DATA over saved data, respecting empty string
+                    try {
+                        const latest = Array.isArray(FURNITURE_DATA) ? FURNITURE_DATA.find(f => f.id === data.furnitureId) : null;
+                        if (latest && Object.prototype.hasOwnProperty.call(latest, 'category')) {
+                            item.category = latest.category; // may be ''
+                        } else if (Object.prototype.hasOwnProperty.call(data, 'category')) {
+                            item.category = data.category; // may be ''
+                        } else if (furnitureType && Object.prototype.hasOwnProperty.call(furnitureType, 'category')) {
+                            item.category = furnitureType.category;
+                        } else {
+                            item.category = '';
+                        }
+                    } catch (_) {
+                        if (Object.prototype.hasOwnProperty.call(data, 'category')) {
+                            item.category = data.category;
+                        } else if (furnitureType && Object.prototype.hasOwnProperty.call(furnitureType, 'category')) {
+                            item.category = furnitureType.category;
+                        } else {
+                            item.category = '';
+                        }
+                    }
                     item.rotation = data.rotation || 0;
                     
                     console.log('Setting rotation to:', item.rotation);
@@ -554,6 +596,16 @@ async function loadSavedFurnitureData(furnitureData) {
                             }
                         }
                     } catch (e) {}
+
+                    // Ensure category icon is rendered/updated after restore
+                    renderFurnitureIcon(item);
+
+                    // If this restored item is currently selected, refresh the panel category
+                    try {
+                        if (window.selectedFurnitureItem === item) {
+                            $('#furnitureCategory').text(item.category || '');
+                        }
+                    } catch (e) {}
                 } else {
                     console.warn('Failed to create furniture item:', data);
                 }
@@ -577,3 +629,74 @@ async function loadSavedFurnitureData(furnitureData) {
 document.addEventListener('DOMContentLoaded', function() {
     initFurnitureSystem();
 });
+
+// Map category to Font Awesome icon class
+function getCategoryIconClass(category) {
+    const cat = (category || '').toLowerCase();
+    switch (cat) {
+        case 'bed': return 'fa-solid fa-bed';
+        case 'chair': return 'fa-solid fa-chair';
+        case 'sofa': return 'fa-solid fa-couch';
+        case 'light': return 'fa-solid fa-lightbulb';
+        case 'utility': return 'fa-solid fa-toilet-portable';
+        case 'table': return 'fa-solid fa-table-cells-large';
+        default: return 'fa-solid fa-star'; // "empty" or unknown
+    }
+}
+
+// Create or update the icon inside the furniture item (non-rotating)
+function renderFurnitureIcon(furnitureItem) {
+    if (!furnitureItem || !furnitureItem.graph) return;
+    const outer = furnitureItem.graph.get ? furnitureItem.graph.get(0) : null;
+    if (!outer) return;
+    const ICON_SIZE = 28; // was 24, make icon a bit bigger
+    const HALF = ICON_SIZE / 2;
+
+    // Remove any icon previously attached to the rotating group to prevent rotation
+    try {
+        const oldInRot = furnitureItem.rotGroup && furnitureItem.rotGroup.get ? furnitureItem.rotGroup.get(0).querySelector('foreignObject.furniture-icon') : null;
+        if (oldInRot) oldInRot.remove();
+    } catch (_) {}
+
+    // Try to find an existing foreignObject with our marker class on the outer group
+    let fo = outer.querySelector('foreignObject.furniture-icon');
+    if (!fo) {
+        // Create a centered 24x24 foreignObject inside the circle (radius 20)
+        fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+        fo.setAttribute('class', 'furniture-icon');
+        fo.setAttribute('x', -HALF);
+        fo.setAttribute('y', -HALF);
+        fo.setAttribute('width', ICON_SIZE);
+        fo.setAttribute('height', ICON_SIZE);
+
+        // Create XHTML wrapper and icon element
+        const div = document.createElement('div');
+        div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+        div.style.width = ICON_SIZE + 'px';
+        div.style.height = ICON_SIZE + 'px';
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.justifyContent = 'center';
+        div.style.pointerEvents = 'none';
+        const iEl = document.createElement('i');
+        iEl.setAttribute('aria-hidden', 'true');
+        div.appendChild(iEl);
+        fo.appendChild(div);
+        outer.appendChild(fo);
+    }
+    // Always ensure position/size reflects current constants (in case we change size later)
+    fo.setAttribute('x', -HALF);
+    fo.setAttribute('y', -HALF);
+    fo.setAttribute('width', ICON_SIZE);
+    fo.setAttribute('height', ICON_SIZE);
+    const divWrap = fo.firstChild;
+    if (divWrap && divWrap.style) {
+        divWrap.style.width = ICON_SIZE + 'px';
+        divWrap.style.height = ICON_SIZE + 'px';
+    }
+    const iEl = fo.querySelector('i');
+    if (!iEl) return;
+    iEl.className = getCategoryIconClass(furnitureItem.category);
+    iEl.style.fontSize = '18px';
+    iEl.style.color = '#ffffff';
+}

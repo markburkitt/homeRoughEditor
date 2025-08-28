@@ -16,6 +16,18 @@ let linElement = $('#lin');
 taille_w = linElement.width();
 taille_h = linElement.height();
 let offset = linElement.offset();
+// Debug: log initial floorplan image (background) width, height, and offset (x,y)
+try {
+    const bgEl = (typeof document !== 'undefined') ? document.getElementById('backgroundImage') : null;
+    if (bgEl) {
+        const parseNum = (v, d=0) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+        const fw = parseNum(bgEl.getAttribute('width'));
+        const fh = parseNum(bgEl.getAttribute('height'));
+        const fx = parseNum(bgEl.getAttribute('x'));
+        const fy = parseNum(bgEl.getAttribute('y'));
+        console.info('[init] floorplan image', { width: fw, height: fh, offset: { x: fx, y: fy } });
+    }
+} catch (_) {}
 grid = 20;
 showRib = true;
 showArea = true;
@@ -44,7 +56,9 @@ let factor = 1;
 
 function initHistory(boot = false) {
     HISTORY.index = 0;
-    if (!boot && localStorage.getItem('history')) localStorage.removeItem('history');
+    // Preserve existing history across sessions to allow restoring background image metrics.
+    // Do not clear here; new plan initializers below will explicitly clear when appropriate.
+    // if (!boot && localStorage.getItem('history')) localStorage.removeItem('history');
     if (localStorage.getItem('history') && boot === "recovery") {
         let historyTemp = JSON.parse(localStorage.getItem('history'));
         load(historyTemp.length - 1, "boot");
@@ -264,7 +278,18 @@ document.getElementById('undo').addEventListener("click", function () {
 });
 
 function save(boot = false) {
-    if (boot) localStorage.removeItem('history');
+    // Only clear history on explicit boolean true; avoid clearing when called with strings like "boot"
+    if (boot === true) localStorage.removeItem('history');
+    // If background image sizing is in progress, defer save to avoid capturing default geometry
+    try {
+        if (typeof window !== 'undefined' && window.__bgSizing) {
+            if (typeof console !== 'undefined' && console.debug) {
+                console.debug('[save] deferred: background image sizing in progress');
+            }
+            setTimeout(function(){ try { save(boot); } catch(_){} }, 50);
+            return false;
+        }
+    } catch(_) {}
     // FOR CYCLIC OBJ INTO LOCALSTORAGE !!!
     for (let k in WALLS) {
         if (WALLS[k].child != null) {
@@ -274,7 +299,62 @@ function save(boot = false) {
             WALLS[k].parent = WALLS.indexOf(WALLS[k].parent);
         }
     }
-    if (JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData() }) === HISTORY[HISTORY.length - 1]) {
+    // Gather background image state if present; if element is absent, carry over from previous snapshot to avoid reset
+    const __bgImgEl = (typeof document !== 'undefined') ? document.getElementById('backgroundImage') : null;
+    // Read previous snapshot (if any) to preserve background image when not present in DOM
+    let __prevSnap = null;
+    try { if (HISTORY && HISTORY.length > 0) { __prevSnap = JSON.parse(HISTORY[HISTORY.length - 1]); } } catch(_) {}
+    // Fallback: read from localStorage history if in-memory HISTORY is empty or unparsable
+    if (!__prevSnap) {
+        try {
+            const __ls = localStorage.getItem('history');
+            if (__ls) {
+                const __arr = JSON.parse(__ls);
+                if (Array.isArray(__arr) && __arr.length > 0) {
+                    __prevSnap = JSON.parse(__arr[__arr.length - 1]);
+                }
+            }
+        } catch(_) {}
+    }
+
+    const backgroundImage = (__bgImgEl) ? (function(el){
+        const parseNum = (v, d=0) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+        const x = parseNum(el.getAttribute('x'), 0);
+        const y = parseNum(el.getAttribute('y'), 0);
+        const width = parseNum(el.getAttribute('width'), 0);
+        const height = parseNum(el.getAttribute('height'), 0);
+        let opacity = parseNum(el.getAttribute('opacity'), 1);
+        if (!isFinite(opacity) || opacity <= 0) opacity = 1;
+        const href = el.getAttribute('href') || el.getAttribute('xlink:href') || '';
+        // Try to attach fileName from currentBackgroundImage reference if available
+        let fileName = null;
+        try { if (window.currentBackgroundImage && window.currentBackgroundImage.fileName) fileName = window.currentBackgroundImage.fileName; } catch(_) {}
+        const snapshot = { x, y, width, height, opacity, href, fileName };
+        try { if (typeof console !== 'undefined' && console.debug) console.debug('[save] backgroundImage snapshot', snapshot); } catch(_) {}
+        return snapshot;
+    })(__bgImgEl) : (__prevSnap && __prevSnap.backgroundImage ? __prevSnap.backgroundImage : null);
+
+    const snapshot = { objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData(), backgroundImage };
+
+    // If caller requests suppression and we'd drop background image (DOM missing) while previous snapshot has one, skip pushing
+    try {
+        if (typeof window !== 'undefined' && window.__suppressSaveIfNoBg) {
+            const hasDomBg = !!__bgImgEl;
+            const hadPrevBg = !!(__prevSnap && __prevSnap.backgroundImage);
+            if (!hasDomBg && hadPrevBg) {
+                if (typeof console !== 'undefined' && console.debug) {
+                    console.debug('[save] suppressed: no DOM backgroundImage while previous snapshot had one');
+                }
+                // Clear the suppression flag for subsequent saves
+                window.__suppressSaveIfNoBg = false;
+                return false;
+            }
+            // Clear flag if we proceed
+            window.__suppressSaveIfNoBg = false;
+        }
+    } catch(_) {}
+
+    if (JSON.stringify(snapshot) === HISTORY[HISTORY.length - 1]) {
         for (let k in WALLS) {
             if (WALLS[k].child != null) {
                 WALLS[k].child = WALLS[WALLS[k].child];
@@ -290,9 +370,25 @@ function save(boot = false) {
         HISTORY.splice(HISTORY.index, (HISTORY.length - HISTORY.index));
         $('#redo').addClass('disabled');
     }
-    HISTORY.push(JSON.stringify({ objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData() }));
+    HISTORY.push(JSON.stringify(snapshot));
     localStorage.setItem('history', JSON.stringify(HISTORY));
     HISTORY.index++;
+    // Log when state is saved to history along with current floorplan image metrics
+    try {
+        const bgEl = (typeof document !== 'undefined') ? document.getElementById('backgroundImage') : null;
+        if (bgEl) {
+            const parseNum = (v, d=0) => { const n = parseFloat(v); return isFinite(n) ? n : d; };
+            const fw = parseNum(bgEl.getAttribute('width'));
+            const fh = parseNum(bgEl.getAttribute('height'));
+            const fx = parseNum(bgEl.getAttribute('x'));
+            const fy = parseNum(bgEl.getAttribute('y'));
+            console.info('[save] snapshot pushed', { historyIndex: HISTORY.index, width: fw, height: fh, offset: { x: fx, y: fy } });
+        } else if (backgroundImage) {
+            console.info('[save] snapshot pushed', { historyIndex: HISTORY.index, width: backgroundImage.width, height: backgroundImage.height, offset: { x: backgroundImage.x, y: backgroundImage.y }, note: 'carried over previous backgroundImage' });
+        } else {
+            console.info('[save] snapshot pushed', { historyIndex: HISTORY.index, note: 'no backgroundImage' });
+        }
+    } catch (_) {}
     if (HISTORY.index > 1) $('#undo').removeClass('disabled');
     for (let k in WALLS) {
         if (WALLS[k].child != null) {
@@ -341,9 +437,85 @@ function load(index = HISTORY.index, boot = false) {
     if (historyTemp.furnitureData) {
         loadSavedFurnitureData(historyTemp.furnitureData);
     }
+    // Restore background image properties if present and an image exists in DOM
+    try {
+        if (historyTemp.backgroundImage) {
+            const bgEl = (typeof document !== 'undefined') ? document.getElementById('backgroundImage') : null;
+            if (bgEl) {
+                // Only restore if it's the same image as saved (match href)
+                const currentHref = bgEl.getAttribute('href') || bgEl.getAttribute('xlink:href') || '';
+                const savedHref = historyTemp.backgroundImage.href || '';
+                try { if (console && console.debug) console.debug('[load] backgroundImage found', { currentHref, savedHref, props: historyTemp.backgroundImage }); } catch(_) {}
+                if (savedHref && currentHref && currentHref === savedHref) {
+                    try { if (console && console.debug) console.debug('[load] applying saved backgroundImage props'); } catch(_) {}
+                    if (typeof adjustBackgroundImage === 'function') {
+                        adjustBackgroundImage(historyTemp.backgroundImage);
+                    } else {
+                        const props = historyTemp.backgroundImage;
+                        if (props.x !== undefined) bgEl.setAttribute('x', props.x);
+                        if (props.y !== undefined) bgEl.setAttribute('y', props.y);
+                        if (props.width !== undefined) bgEl.setAttribute('width', props.width);
+                        if (props.height !== undefined) bgEl.setAttribute('height', props.height);
+                        if (props.opacity !== undefined) bgEl.setAttribute('opacity', props.opacity);
+                    }
+                } else {
+                    try { if (console && console.debug) console.debug('[load] skipping apply: href mismatch or missing'); } catch(_) {}
+                }
+            } else {
+                try { if (console && console.debug) console.debug('[load] no #backgroundImage element to restore to'); } catch(_) {}
+            }
+        }
+    } catch (e) {
+        console.warn('Error restoring background image properties:', e);
+    }
+
+    // Update UI: filename display and Floorplan mode button based on background image presence
+    try {
+        const bgEl = (typeof document !== 'undefined') ? document.getElementById('backgroundImage') : null;
+        const nameEl = (typeof document !== 'undefined') ? document.getElementById('floorplan_filename') : null;
+        const btn = (typeof document !== 'undefined') ? document.getElementById('floorplan_mode_btn') : null;
+        if (bgEl) {
+            // Enable button and show saved filename if available
+            if (btn) btn.disabled = false;
+            if (nameEl) {
+                const savedName = (historyTemp.backgroundImage && historyTemp.backgroundImage.fileName) ? historyTemp.backgroundImage.fileName : '';
+                nameEl.textContent = savedName;
+            }
+        } else {
+            // No background image element yet: show last used filename if available but keep button disabled
+            if (nameEl) {
+                const savedName = (historyTemp.backgroundImage && historyTemp.backgroundImage.fileName) ? historyTemp.backgroundImage.fileName : '';
+                nameEl.textContent = savedName;
+            }
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Floorplan mode';
+            }
+            if (window.__floorplanMode && typeof exitFloorplanMode === 'function') {
+                exitFloorplanMode();
+            }
+        }
+    } catch(_) {}
     editor.architect(WALLS);
     editor.showScaleBox();
     rib();
+
+    // Ensure we default to select mode after loading a snapshot
+    try {
+        if (typeof $ !== 'undefined') {
+            $('#boxinfo').html('Mode "select"');
+            // Clear any lingering binders
+            if (typeof binder !== 'undefined') {
+                try { if (binder.graph) $(binder.graph).remove(); else if (binder.remove) binder.remove(); } catch (e) {}
+                $('#boxbind').empty();
+                binder = undefined;
+            }
+            // Update buttons UI without triggering a save (avoid fonc_button which calls save())
+            if (typeof raz_button === 'function') raz_button();
+            $('#select_mode').removeClass('btn-default').addClass('btn-success');
+        }
+        mode = 'select_mode';
+    } catch(_) {}
 }
 
 $('svg').each(function () {
@@ -2347,25 +2519,29 @@ document.getElementById('import_image_mode').addEventListener('click', function(
     triggerImageImportDialog();
 });
 
-// Background image scale slider event handler
-document.getElementById('backgroundImageScaleSlider').addEventListener('input', function() {
-    const scaleValue = this.value;
-    scaleBackgroundImage(scaleValue);
-    document.getElementById('backgroundImageScaleVal').textContent = scaleValue;
-});
-
-// Background image opacity slider event handler
-document.getElementById('backgroundImageOpacitySlider').addEventListener('input', function() {
-    const opacityValue = this.value;
-    setBackgroundImageOpacity(opacityValue);
-    document.getElementById('backgroundImageOpacityVal').textContent = opacityValue;
-});
-
-// Background image remove button event handler
-document.getElementById('backgroundImageRemove').addEventListener('click', function() {
-    if (confirm('Are you sure you want to remove the background image?')) {
-        removeBackgroundImage();
-        hideBackgroundImageTools();
-        $('#boxinfo').html('Background image removed');
+// Background image opacity slider event handler (guard against missing element)
+(function(){
+    const opacitySlider = document.getElementById('backgroundImageOpacitySlider');
+    if (opacitySlider) {
+        opacitySlider.addEventListener('input', function() {
+            const opacityValue = this.value;
+            if (typeof setBackgroundImageOpacity === 'function') setBackgroundImageOpacity(opacityValue);
+            const label = document.getElementById('backgroundImageOpacityVal');
+            if (label) label.textContent = opacityValue;
+        });
     }
-});
+})();
+
+// Background image remove button event handler (guard against missing element)
+(function(){
+    const removeBtn = document.getElementById('backgroundImageRemove');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to remove the background image?')) {
+                if (typeof removeBackgroundImage === 'function') removeBackgroundImage();
+                if (typeof hideBackgroundImageTools === 'function') hideBackgroundImageTools();
+                if (typeof $ !== 'undefined') $('#boxinfo').html('Background image removed');
+            }
+        });
+    }
+})();

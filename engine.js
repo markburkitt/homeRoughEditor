@@ -74,6 +74,21 @@ function _MOUSEMOVE(event) {
   // Cleanup debug markers so they don't linger when moving away from key points
   $('#boxDebug').empty();
 
+  // In floorplan mode, do not show hover highlights over walls/nodes (binder visuals)
+  if (window.__floorplanMode && mode === 'select_mode') {
+    try {
+      if (typeof (binder) !== 'undefined') {
+        if (binder.remove) binder.remove();
+        else if (binder.graph && binder.graph.remove) binder.graph.remove();
+        delete binder;
+      }
+    } catch (_) { /* no-op */ }
+    // Also ensure the binder container is clear
+    try { $('#boxbind').empty(); } catch (_) { /* no-op */ }
+    // Stop processing to avoid recreating highlights
+    return;
+  }
+
   //**************************************************************************
   //********************   TEXTE   MODE **************************************
   //**************************************************************************
@@ -1124,7 +1139,9 @@ function _MOUSEMOVE(event) {
     document.getElementById('backgroundImageTools').style.display !== 'none' &&
     window.getComputedStyle(document.getElementById('backgroundImageTools')).display !== 'none';
 
-  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode') && drag == 'on' && !backgroundImageToolsOpen && !window.draggingFurnitureItem) {
+  // Permit panning when floorplan mode is active even if background image tools are open
+  const floorplanMode = !!window.__floorplanMode;
+  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
     distX = (snap.xMouse - pox) * factor;
@@ -1146,6 +1163,19 @@ function _MOUSEMOVE(event) {
 function _MOUSEDOWN(event) {
 
   event.preventDefault();
+  // In floorplan mode, block edits in select mode entirely
+  if (window.__floorplanMode && mode === 'select_mode') {
+    // Ensure no binder remains
+    try {
+      if (typeof (binder) !== 'undefined') {
+        if (binder.remove) binder.remove();
+        else if (binder.graph && binder.graph.remove) binder.graph.remove();
+        delete binder;
+      }
+      $('#boxbind').empty();
+    } catch (_) { /* no-op */ }
+    return;
+  }
   // *******************************************************************
   // **************************   DISTANCE MODE   **********************
   // *******************************************************************
@@ -1220,6 +1250,12 @@ function _MOUSEDOWN(event) {
   // *******************************************************************
   if (mode == 'select_mode') {
     if (typeof (binder) != 'undefined' && (binder.type == 'segment' || binder.type == 'node' || binder.type == 'obj' || binder.type == 'boundingBox')) {
+      // In floorplan mode: disable wall/object editing interactions
+      if (window.__floorplanMode) {
+        // Do not enter bind mode or start edits when aligning to image
+        if (typeof $ !== 'undefined') $('#boxinfo').html('Floorplan mode: editing disabled');
+        return; // prevent switching to bind_mode
+      }
       mode = 'bind_mode';
 
       if (binder.type == 'obj') {

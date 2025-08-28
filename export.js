@@ -18,6 +18,8 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
             if (wall.child != null) {
                 wall.child = WALLS.indexOf(wall.child);
             }
+
+ 
             if (wall.parent != null) {
                 wall.parent = WALLS.indexOf(wall.parent);
             }
@@ -112,6 +114,104 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
     }
 }
 
+
+// ------------------------ Floorplan Mode (view floorplan under walls) ------------------------
+/**
+ * Make walls translucent and trigger the same behavior as a double-click on the floorplan.
+ * Useful for aligning to a background image.
+ */
+function enterFloorplanMode() {
+    try {
+        // Dim only walls layer so underlying background remains visible
+        const boxWall = document.getElementById('boxwall');
+        if (boxWall) {
+            boxWall.setAttribute('opacity', '0.35');
+            boxWall.setAttribute('pointer-events', 'none');
+        }
+        // Dim identified room layers similarly
+        const boxRoom = document.getElementById('boxRoom');
+        if (boxRoom) {
+            boxRoom.setAttribute('opacity', '0.35');
+            boxRoom.setAttribute('pointer-events', 'none');
+        }
+        const boxSurface = document.getElementById('boxSurface');
+        if (boxSurface) {
+            boxSurface.setAttribute('opacity', '0.35');
+            boxSurface.setAttribute('pointer-events', 'none');
+        }
+
+        // If a background image exists, show its tools (equivalent to double-clicking the image)
+        const bgImg = document.getElementById('backgroundImage');
+        if (bgImg && typeof showBackgroundImageTools === 'function') {
+            showBackgroundImageTools();
+        }
+
+        window.__floorplanMode = true;
+        if (typeof $ !== 'undefined') $('#boxinfo').html('Floorplan mode: walls translucent');
+        // Update stored toggle button label if any
+        if (window.__floorplanBtn && window.__floorplanBtn instanceof HTMLElement) {
+            window.__floorplanBtn.innerText = 'Exit floorplan mode';
+        }
+    } catch (e) { console.error('enterFloorplanMode error:', e); }
+}
+
+/**
+ * Restore normal wall opacity
+ */
+function exitFloorplanMode() {
+    try {
+        const boxWall = document.getElementById('boxwall');
+        if (boxWall) {
+            boxWall.setAttribute('opacity', '1');
+            // Explicitly restore interactivity
+            boxWall.setAttribute('pointer-events', 'auto');
+        }
+        // Restore room layers opacity
+        const boxRoom = document.getElementById('boxRoom');
+        if (boxRoom) {
+            boxRoom.setAttribute('opacity', '1');
+            boxRoom.setAttribute('pointer-events', 'auto');
+        }
+        const boxSurface = document.getElementById('boxSurface');
+        if (boxSurface) {
+            boxSurface.setAttribute('opacity', '1');
+            boxSurface.setAttribute('pointer-events', 'auto');
+        }
+        // Restore binder/highlight layer
+        const boxBind = document.getElementById('boxbind');
+        if (boxBind) {
+            boxBind.removeAttribute('display');
+        }
+        // Hide background image tools if visible
+        if (typeof hideBackgroundImageTools === 'function') {
+            hideBackgroundImageTools();
+        }
+        window.__floorplanMode = false;
+        if (typeof $ !== 'undefined') $('#boxinfo').html('Floorplan mode: off');
+        // Update stored toggle button label if any
+        if (window.__floorplanBtn && window.__floorplanBtn instanceof HTMLElement) {
+            window.__floorplanBtn.innerText = 'Floorplan mode';
+        }
+    } catch (e) { console.error('exitFloorplanMode error:', e); }
+}
+
+/**
+ * Toggle floorplan mode and update button label if present
+ */
+function toggleFloorplanMode(btn) {
+    // Remember the last-used toggle button for later label sync
+    if (btn && btn instanceof HTMLElement) {
+        window.__floorplanBtn = btn;
+    }
+    const on = !!window.__floorplanMode;
+    if (on) {
+        exitFloorplanMode();
+        if (btn && btn instanceof HTMLElement) btn.innerText = 'Floorplan mode';
+    } else {
+        enterFloorplanMode();
+        if (btn && btn instanceof HTMLElement) btn.innerText = 'Exit floorplan mode';
+    }
+}
 
 /**
  * Trigger file input dialog for importing AI JSON ({"walls": [[x0,y0,x1,y1], ...]})
@@ -779,8 +879,10 @@ function loadFloorplanData(jsonData) {
             rib();
         }
 
-        // Save the imported state to history
+        // Save the imported state to history.
+        // Suppress save if background image element is not present but previous snapshot had one.
         if (typeof save === 'function') {
+            try { if (typeof window !== 'undefined') window.__suppressSaveIfNoBg = true; } catch(_) {}
             save();
         }
 
@@ -896,6 +998,13 @@ function importBackgroundImage(file) {
                     if (typeof $('#boxinfo') !== 'undefined') {
                         $('#boxinfo').html('Background image imported successfully!');
                     }
+                    // Update UI: show filename and enable Floorplan mode button
+                    try {
+                        const nameEl = document.getElementById('floorplan_filename');
+                        if (nameEl) nameEl.textContent = file.name || '';
+                        const btn = document.getElementById('floorplan_mode_btn');
+                        if (btn) btn.disabled = false;
+                    } catch(_) {}
                     resolve(true);
                 } else {
                     console.error('Failed to add background image');
@@ -934,6 +1043,27 @@ function importBackgroundImage(file) {
  */
 function addBackgroundImage(imageDataUrl, fileName) {
     try {
+        // Capture existing image geometry if same image is being reloaded
+        let previousGeometry = null;
+        try {
+            const existingEl = document.getElementById('backgroundImage');
+            if (existingEl) {
+                const prevHref = existingEl.getAttribute('href') || existingEl.getAttribute('xlink:href') || '';
+                if (prevHref && imageDataUrl && prevHref === imageDataUrl) {
+                    previousGeometry = {
+                        x: parseFloat(existingEl.getAttribute('x')) || 0,
+                        y: parseFloat(existingEl.getAttribute('y')) || 0,
+                        width: parseFloat(existingEl.getAttribute('width')) || 0,
+                        height: parseFloat(existingEl.getAttribute('height')) || 0,
+                        opacity: parseFloat(existingEl.getAttribute('opacity'))
+                    };
+                    if (typeof console !== 'undefined' && console.debug) {
+                        console.debug('[addBackgroundImage] preserving previous geometry for same image', previousGeometry);
+                    }
+                }
+            }
+        } catch (_) {}
+
         // Remove any existing background image
         removeBackgroundImage();
         
@@ -947,7 +1077,6 @@ function addBackgroundImage(imageDataUrl, fileName) {
         // Create image element
         const imageElement = document.createElementNS('http://www.w3.org/2000/svg', 'image');
         imageElement.setAttribute('id', 'backgroundImage');
-        imageElement.setAttribute('href', imageDataUrl);
         
         // Add double-click event handler
         imageElement.addEventListener('dblclick', function(e) {
@@ -974,6 +1103,7 @@ function addBackgroundImage(imageDataUrl, fileName) {
             e.stopPropagation();
             
             isDragging = true;
+            window.draggingBackgroundImage = true; // inform engine to pause scene panning
             dragStartX = e.clientX;
             dragStartY = e.clientY;
             imageStartX = parseFloat(imageElement.getAttribute('x')) || 0;
@@ -1000,6 +1130,7 @@ function addBackgroundImage(imageDataUrl, fileName) {
         document.addEventListener('mouseup', function(e) {
             if (isDragging) {
                 isDragging = false;
+                window.draggingBackgroundImage = false;
                 updateImageCursor();
             }
         });
@@ -1021,14 +1152,12 @@ function addBackgroundImage(imageDataUrl, fileName) {
         // Set initial cursor
         updateImageCursor();
         
-        // Position the image to cover the viewable area
-        // We'll start with a reasonable size and position
-        imageElement.setAttribute('x', '0');
-        imageElement.setAttribute('y', '0');
-        imageElement.setAttribute('width', '1100');
-        imageElement.setAttribute('height', '700');
-        imageElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-        imageElement.setAttribute('opacity', '0.7'); // Semi-transparent so grid and other elements are visible
+        // Do not show default size/position; wait for intrinsic probe to set them
+        // Keep preserveAspectRatio but hide initially to avoid flashing at 0,0 1100x700
+        imageElement.setAttribute('preserveAspectRatio', 'xMinYMin meet');
+        imageElement.setAttribute('opacity', '0'); // will be restored after sizing
+        // Mark that background image sizing is in progress to avoid premature snapshotting
+        try { if (typeof window !== 'undefined') window.__bgSizing = true; } catch(_) {}
         
         // Add to the SVG, but after the grid and before other elements
         const boxGrid = document.getElementById('boxgrid');
@@ -1040,17 +1169,160 @@ function addBackgroundImage(imageDataUrl, fileName) {
             if (defs && defs.nextSibling) {
                 svgElement.insertBefore(imageElement, defs.nextSibling);
             } else {
-                svgElement.appendChild(imageElement);
+                svgElement.insertBefore(imageElement, svgElement.firstChild);
             }
         }
         
+        // Attach a MutationObserver to trace attribute changes on the background image
+        try {
+            if (window._bgImgObserver) {
+                try { window._bgImgObserver.disconnect(); } catch(_) {}
+            }
+            const attrsToWatch = ['x','y','width','height','opacity','href','xlink:href'];
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach(m => {
+                    if (m.type === 'attributes') {
+                        const name = m.attributeName;
+                        if (attrsToWatch.includes(name)) {
+                            const newVal = imageElement.getAttribute(name) || imageElement.getAttributeNS('http://www.w3.org/1999/xlink', name) || null;
+                            const oldVal = m.oldValue;
+                            if (typeof console !== 'undefined') {
+                                console.debug('[bgImage observe]', { name, oldVal, newVal });
+                                if (console.trace) console.trace('[bgImage attribute changed]');
+                            }
+                        }
+                    }
+                });
+            });
+            observer.observe(imageElement, { attributes: true, attributeOldValue: true, attributeFilter: attrsToWatch });
+            window._bgImgObserver = observer;
+        } catch(_) { /* ignore observer errors */ }
+
+        
+        // Use the uploaded image's intrinsic size to set initial SVG image dimensions
+        // so landscape/portrait are respected, and center it within the 1100x700 viewBox
+        try {
+            const probe = new Image();
+            probe.onload = function() {
+                const natW = probe.naturalWidth || 1100;
+                const natH = probe.naturalHeight || 700;
+                // Establish base viewBox size (SVG is 1100x700)
+                const baseW = 1100;
+                const baseH = 700;
+                // Compute initial size preserving aspect ratio to fit within viewBox
+                const scale = Math.min(baseW / natW, baseH / natH);
+                const w = Math.max(1, Math.round(natW * scale));
+                const h = Math.max(1, Math.round(natH * scale));
+                // Centered position
+                const cx = Math.round((baseW - w) / 2);
+                const cy = Math.round((baseH - h) / 2);
+
+                // Apply geometry; if reloading same image, preserve previous geometry
+                if (previousGeometry) {
+                    const pw = previousGeometry.width > 0 ? previousGeometry.width : w;
+                    const ph = previousGeometry.height > 0 ? previousGeometry.height : h;
+                    const px = previousGeometry.x != null ? previousGeometry.x : cx;
+                    const py = previousGeometry.y != null ? previousGeometry.y : cy;
+                    imageElement.setAttribute('width', String(pw));
+                    imageElement.setAttribute('height', String(ph));
+                    imageElement.setAttribute('x', String(px));
+                    imageElement.setAttribute('y', String(py));
+                } else {
+                    imageElement.setAttribute('width', String(w));
+                    imageElement.setAttribute('height', String(h));
+                    imageElement.setAttribute('x', String(cx));
+                    imageElement.setAttribute('y', String(cy));
+                }
+                if (imageElement.dataset) {
+                    const naturalAspect = natW / natH;
+                    imageElement.dataset.naturalAspect = String(naturalAspect);
+                    imageElement.dataset.aspectRatio = String(naturalAspect);
+                }
+                // Update stored reference geometry if present
+                if (window.currentBackgroundImage) {
+                    window.currentBackgroundImage.x = cx;
+                    window.currentBackgroundImage.y = cy;
+                    window.currentBackgroundImage.width = w;
+                    window.currentBackgroundImage.height = h;
+                }
+                if (typeof console !== 'undefined' && console.debug) {
+                    console.debug('[addBackgroundImage] sized & centered', { natW, natH, baseW, baseH, w, h, cx, cy });
+                }
+                // Now set the image source; this will paint with the correct geometry
+                imageElement.setAttribute('href', imageDataUrl);
+                imageElement.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', imageDataUrl);
+                // Reveal now that proper size/position are applied
+                imageElement.setAttribute('opacity', String(previousGeometry && previousGeometry.opacity != null ? previousGeometry.opacity : 0.7));
+
+                // If we didn't capture previousGeometry from an existing element, try restoring
+                // geometry from the most recent HISTORY snapshot that matches this image by href or fileName.
+                try {
+                    if (!previousGeometry && typeof localStorage !== 'undefined') {
+                        const histStr = localStorage.getItem('history');
+                        if (histStr) {
+                            const histArr = JSON.parse(histStr);
+                            for (let i = histArr.length - 1; i >= 0; i--) {
+                                try {
+                                    const snap = JSON.parse(histArr[i]);
+                                    if (snap && snap.backgroundImage) {
+                                        const hrefMatch = (snap.backgroundImage.href === imageDataUrl);
+                                        const nameMatch = (fileName && snap.backgroundImage.fileName && String(fileName).toLowerCase() === String(snap.backgroundImage.fileName).toLowerCase());
+                                        if (hrefMatch || nameMatch) {
+                                        const props = snap.backgroundImage;
+                                        if (props.width != null) imageElement.setAttribute('width', props.width);
+                                        if (props.height != null) imageElement.setAttribute('height', props.height);
+                                        if (props.x != null) imageElement.setAttribute('x', props.x);
+                                        if (props.y != null) imageElement.setAttribute('y', props.y);
+                                        if (props.opacity != null) imageElement.setAttribute('opacity', props.opacity);
+                                        if (typeof console !== 'undefined' && console.debug) {
+                                            console.debug('[addBackgroundImage] restored geometry from HISTORY snapshot', { hrefMatch, nameMatch });
+                                        }
+                                        break;
+                                        }
+                                    }
+                                } catch(_) { /* skip malformed entry */ }
+                            }
+                        }
+                    }
+                } catch(_) { /* ignore history restore errors */ }
+
+                // Persist correct geometry now that it's set
+                try {
+                    // Clear sizing guard before saving so save() proceeds
+                    if (typeof window !== 'undefined') window.__bgSizing = false;
+                    if (typeof save === 'function') save();
+                } catch(_) { /* ignore */ }
+
+                // If the background image tools are open, refresh their fields to reflect new geometry
+                try {
+                    const tools = document.getElementById('backgroundImageTools');
+                    const visible = tools && tools.style.display !== 'none' && window.getComputedStyle(tools).display !== 'none';
+                    if (visible && typeof showBackgroundImageTools === 'function') {
+                        showBackgroundImageTools();
+                    }
+                } catch(_) { /* ignore */ }
+            };
+            probe.src = imageDataUrl;
+        } catch (e) {
+            console.warn('Could not derive intrinsic image size:', e);
+            try { if (typeof window !== 'undefined') window.__bgSizing = false; } catch(_) {}
+        }
+
         // Store reference for later manipulation
         window.currentBackgroundImage = {
             element: imageElement,
             fileName: fileName,
             dataUrl: imageDataUrl
         };
-        
+
+        // Update UI: set filename display and enable Floorplan mode button
+        try {
+            const nameEl = document.getElementById('floorplan_filename');
+            if (nameEl) nameEl.textContent = fileName || '';
+            const btn = document.getElementById('floorplan_mode_btn');
+            if (btn) btn.disabled = false;
+        } catch(_) {}
+
         return true;
         
     } catch (error) {
@@ -1073,7 +1345,20 @@ function removeBackgroundImage() {
         if (window.currentBackgroundImage) {
             delete window.currentBackgroundImage;
         }
-        
+
+        // Update UI: clear filename, disable Floorplan mode button, and exit mode if active
+        try {
+            const nameEl = document.getElementById('floorplan_filename');
+            if (nameEl) nameEl.textContent = '';
+            const btn = document.getElementById('floorplan_mode_btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Floorplan mode';
+            }
+            if (window.__floorplanMode && typeof exitFloorplanMode === 'function') {
+                exitFloorplanMode();
+            }
+        } catch(_) {}
     } catch (error) {
         console.error('Error removing background image:', error);
     }
@@ -1117,14 +1402,22 @@ function adjustBackgroundImage(properties) {
             console.warn('No background image to adjust');
             return false;
         }
-        
-        // Apply properties
-        if (properties.x !== undefined) imageElement.setAttribute('x', properties.x);
-        if (properties.y !== undefined) imageElement.setAttribute('y', properties.y);
-        if (properties.width !== undefined) imageElement.setAttribute('width', properties.width);
-        if (properties.height !== undefined) imageElement.setAttribute('height', properties.height);
-        if (properties.opacity !== undefined) imageElement.setAttribute('opacity', properties.opacity);
-        
+        try { if (console && console.debug) console.debug('[adjustBackgroundImage] input', properties); } catch(_) {}
+        const keys = ['x', 'y', 'width', 'height', 'opacity'];
+        keys.forEach(key => {
+            if (properties[key] !== undefined) imageElement.setAttribute(key, properties[key]);
+        });
+        try {
+            if (console && console.debug) {
+                console.debug('[adjustBackgroundImage] applied', {
+                    x: imageElement.getAttribute('x'),
+                    y: imageElement.getAttribute('y'),
+                    width: imageElement.getAttribute('width'),
+                    height: imageElement.getAttribute('height'),
+                    opacity: imageElement.getAttribute('opacity')
+                });
+            }
+        } catch(_) {}
         return true;
         
     } catch (error) {
@@ -1148,19 +1441,83 @@ function showBackgroundImageTools() {
         $('.leftBox').hide();
         $('#backgroundImageTools').show(200);
         
-        // Update slider values based on current image properties
-        const currentWidth = parseFloat(imageElement.getAttribute('width')) || 1100;
+        // Initialize size inputs based on current image properties
+        const currentWidthPx = parseFloat(imageElement.getAttribute('width')) || 1100;
+        const currentHeightPx = parseFloat(imageElement.getAttribute('height')) || 700;
         const currentOpacity = parseFloat(imageElement.getAttribute('opacity')) || 0.7;
-        
-        // Calculate scale percentage (assuming base width of 1100)
-        const scalePercent = Math.round((currentWidth / 1100) * 100);
+
+        // Prefer intrinsic aspect ratio if available
+        let aspect = undefined;
+        if (imageElement.dataset && imageElement.dataset.aspectRatio) {
+            aspect = parseFloat(imageElement.dataset.aspectRatio);
+        }
+        if (!isFinite(aspect) || aspect <= 0) {
+            aspect = (currentWidthPx > 0 && currentHeightPx > 0)
+                ? (currentWidthPx / currentHeightPx)
+                : (1100 / 700);
+            if (imageElement.dataset) imageElement.dataset.aspectRatio = String(aspect);
+        }
+
+        const pxPerMeter = 60; // editor scale
+        const widthMInput = document.getElementById('backgroundImageWidthM');
+        const heightMInput = document.getElementById('backgroundImageHeightM');
+        const aspectInfo = document.getElementById('backgroundImageAspectInfo');
+
+        if (widthMInput) widthMInput.value = (currentWidthPx / pxPerMeter).toFixed(2);
+        if (heightMInput) heightMInput.value = (currentHeightPx / pxPerMeter).toFixed(2);
+        if (aspectInfo) aspectInfo.textContent = `Aspect ratio: ${(aspect).toFixed(4)} (W/H)`;
+
+        // Bind input handlers to maintain aspect ratio
+        if (widthMInput) {
+            widthMInput.oninput = function(e) {
+                const img = document.getElementById('backgroundImage');
+                if (!img) return;
+                const curX = parseFloat(img.getAttribute('x')) || 0;
+                const curY = parseFloat(img.getAttribute('y')) || 0;
+                const ar = parseFloat(img.dataset.aspectRatio) || aspect;
+                const wM = parseFloat(e.target.value);
+                if (!isFinite(wM) || wM <= 0) return;
+                const wPx = wM * pxPerMeter;
+                const hPx = wPx / ar;
+                img.setAttribute('width', String(wPx));
+                img.setAttribute('height', String(hPx));
+                img.setAttribute('x', String(curX));
+                img.setAttribute('y', String(curY));
+                if (heightMInput) heightMInput.value = (hPx / pxPerMeter).toFixed(2);
+            };
+        }
+        if (heightMInput) {
+            heightMInput.oninput = function(e) {
+                const img = document.getElementById('backgroundImage');
+                if (!img) return;
+                const curX = parseFloat(img.getAttribute('x')) || 0;
+                const curY = parseFloat(img.getAttribute('y')) || 0;
+                const ar = parseFloat(img.dataset.aspectRatio) || aspect;
+                const hM = parseFloat(e.target.value);
+                if (!isFinite(hM) || hM <= 0) return;
+                const hPx = hM * pxPerMeter;
+                const wPx = hPx * ar;
+                img.setAttribute('width', String(wPx));
+                img.setAttribute('height', String(hPx));
+                img.setAttribute('x', String(curX));
+                img.setAttribute('y', String(curY));
+                if (widthMInput) widthMInput.value = (wPx / pxPerMeter).toFixed(2);
+            };
+        }
+
+        // Initialize opacity slider and label
         const opacityPercent = Math.round(currentOpacity * 100);
-        
-        // Update slider values and displays
-        document.getElementById('backgroundImageScaleSlider').value = scalePercent;
-        document.getElementById('backgroundImageScaleVal').textContent = scalePercent;
-        document.getElementById('backgroundImageOpacitySlider').value = opacityPercent;
-        document.getElementById('backgroundImageOpacityVal').textContent = opacityPercent;
+        const opacitySlider = document.getElementById('backgroundImageOpacitySlider');
+        const opacityLabel = document.getElementById('backgroundImageOpacityVal');
+        if (opacitySlider) opacitySlider.value = opacityPercent;
+        if (opacityLabel) opacityLabel.textContent = opacityPercent;
+        if (opacitySlider) {
+            opacitySlider.oninput = function(e) {
+                const v = parseInt(e.target.value, 10) || 70;
+                setBackgroundImageOpacity(v);
+                if (opacityLabel) opacityLabel.textContent = v;
+            };
+        }
         
         // Update info box
         if (typeof $('#boxinfo') !== 'undefined') {
