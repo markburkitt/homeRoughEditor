@@ -488,22 +488,20 @@ function updateFloorplanHeight() {
  */
 function scaleAllElementsUniformly(scaleFactor) {
     try {
-        // Calculate current center point for scaling
+        // Calculate bounds and origin point for rigid scaling
         const bounds = calculateFloorplanBounds();
-        const centerX = bounds.minX + bounds.width / 2;
-        const centerY = bounds.minY + bounds.height / 2;
+        const originX = bounds.minX;
+        const originY = bounds.minY;
         
-        console.log('Uniform scaling by factor:', scaleFactor, 'Center:', centerX, centerY);
+        console.log('Rigid scaling by factor:', scaleFactor, 'Origin:', originX, originY);
         
-        // Scale walls uniformly - same factor for both X and Y coordinates
         WALLS.forEach(wall => {
-            // Scale start point relative to center (uniform scaling)
-            wall.start.x = centerX + (wall.start.x - centerX) * scaleFactor;
-            wall.start.y = centerY + (wall.start.y - centerY) * scaleFactor;
+            // Scale from fixed origin point (top-left) to maintain wall angles
+            wall.start.x = originX + (wall.start.x - originX) * scaleFactor;
+            wall.start.y = originY + (wall.start.y - originY) * scaleFactor;
             
-            // Scale end point relative to center (uniform scaling)
-            wall.end.x = centerX + (wall.end.x - centerX) * scaleFactor;
-            wall.end.y = centerY + (wall.end.y - centerY) * scaleFactor;
+            wall.end.x = originX + (wall.end.x - originX) * scaleFactor;
+            wall.end.y = originY + (wall.end.y - originY) * scaleFactor;
         });
         
         // Restore doors/windows to their exact relative positions on scaled walls
@@ -541,15 +539,15 @@ function scaleAllElementsUniformly(scaleFactor) {
             });
         }
         
-        // Scale furniture uniformly (same factor for X and Y)
+        // Scale furniture from fixed origin point
         if (window.OBJDATA) {
             window.OBJDATA.forEach(obj => {
                 if (obj) {
-                    // Uniform scaling of position relative to center
-                    obj.x = centerX + (obj.x - centerX) * scaleFactor;
-                    obj.y = centerY + (obj.y - centerY) * scaleFactor;
+                    // Scale position from fixed origin point
+                    obj.x = originX + (obj.x - originX) * scaleFactor;
+                    obj.y = originY + (obj.y - originY) * scaleFactor;
                     
-                    // Uniform scaling of furniture size
+                    // Scale furniture size
                     if (obj.size !== undefined) {
                         obj.size = obj.size * scaleFactor;
                     }
