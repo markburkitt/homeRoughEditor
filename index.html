@@ -427,6 +427,34 @@
         class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
   </div>
 
+  <div id="scalingTools" class="leftBox" style="display:none;">
+    <h2>Floorplan Scaling</h2>
+    <hr />
+    <p>Current floorplan dimensions:</p>
+    <section id="scalingDimensions">
+      <div class="input-group mb-2" style="display:flex; align-items:center; gap:8px;">
+        <span class="input-group-text" style="min-width:60px; font-size:12px; padding:4px 6px;">Width</span>
+        <input type="number" id="floorplanWidth" min="0.1" step="0.1" class="form-control" style="flex:1 1 auto; width:100%; max-width:none;" oninput="updateFloorplanWidth()" />
+        <span class="input-group-text" style="font-size:12px; padding:4px 6px;">m</span>
+      </div>
+      <div class="input-group mb-2" style="display:flex; align-items:center; gap:8px;">
+        <span class="input-group-text" style="min-width:60px; font-size:12px; padding:4px 6px;">Height</span>
+        <input type="number" id="floorplanHeight" min="0.1" step="0.1" class="form-control" style="flex:1 1 auto; width:100%; max-width:none;" oninput="updateFloorplanHeight()" />
+        <span class="input-group-text" style="font-size:12px; padding:4px 6px;">m</span>
+      </div>
+    </section>
+    <hr />
+    <section id="scalingInfo">
+      <div class="small text-muted">
+        <div>Original: <span id="originalDimensions">-</span></div>
+        <div>Scale factor: <span id="scaleFactor">1.0</span></div>
+      </div>
+    </section>
+    <br />
+    <button class="btn btn-info" onclick="exitScalingMode()"><i
+        class="fa fa-2x fa-backward" aria-hidden="true"></i> Exit Scaling</button>
+  </div>
+
   <div id="panel" class="leftBox">
     <ul class="list-unstyled">
       <li><button class="btn disabled halfy " id="undo" title="undo"><i class="fa fa-chevron-circle-left"
@@ -539,6 +567,10 @@
         <button class="btn btn-light shadow fully" id="floorplan_mode_btn" title="Toggle floorplan mode" disabled
           onclick="toggleFloorplanMode(this);">Floorplan mode</button>
         <div id="floorplan_filename" class="small text-muted mt-1" style="word-break: break-all;"></div>
+      </li>
+      <li>
+        <button class="btn btn-light shadow fully" id="scaling_mode_btn" title="Toggle floorplan scaling mode"
+          onclick="toggleScalingMode(this);">Scaling mode</button>
       </li>
 
       <div id="layer_list" class="list-unstyled sub"

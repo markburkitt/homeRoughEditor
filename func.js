@@ -2572,10 +2572,11 @@ document.getElementById('import_image_mode').addEventListener('click', function(
             const validJson = /\.json$/i.test(jf.name);
             if (!validJson) { ok = false; if (errMsg) errMsg.textContent = 'Selected JSON file is not a .json'; }
         } else { ok = false; }
+        // Image is optional; if provided, validate type
         if (imf) {
             const validImg = /\.(png|jpe?g)$/i.test(imf.name);
             if (!validImg) { ok = false; if (errMsg) errMsg.textContent = 'Selected image must be PNG or JPG'; }
-        } else { ok = false; }
+        }
         importBtn.disabled = !ok;
     }
 
@@ -2616,16 +2617,20 @@ document.getElementById('import_image_mode').addEventListener('click', function(
                 return;
             }
 
-            const imgOk = await (typeof importBackgroundImage === 'function' ? importBackgroundImage(imf) : Promise.resolve(false));
-            if (!imgOk) {
-                if (errMsg) errMsg.textContent = 'Floorplan JSON loaded, but background image import failed.';
-                importBtn.textContent = 'Import';
-                validateEnable();
-                return;
+            // Image is optional: only try importing if provided
+            let imgOk = true;
+            if (imf) {
+                imgOk = await (typeof importBackgroundImage === 'function' ? importBackgroundImage(imf) : Promise.resolve(false));
+                if (!imgOk) {
+                    if (errMsg) errMsg.textContent = 'Floorplan JSON loaded, but background image import failed.';
+                    importBtn.textContent = 'Import';
+                    validateEnable();
+                    return;
+                }
             }
 
-            if (okMsg) okMsg.textContent = 'Imported successfully!';
-            if (typeof $ !== 'undefined') $('#boxinfo').html('Floorplan and image imported successfully');
+            if (okMsg) okMsg.textContent = imf ? 'Imported successfully!' : 'Floorplan JSON imported successfully.';
+            if (typeof $ !== 'undefined') $('#boxinfo').html(imf ? 'Floorplan and image imported successfully' : 'Floorplan JSON imported successfully');
 
             // Close modal after short delay and clear inputs
             setTimeout(function(){
