@@ -671,27 +671,225 @@ function getActualFloorplanDimensions() {
 }
 
 /**
- * Trigger file input dialog for importing AI JSON ({"walls": [[x0,y0,x1,y1], ...]})
+ * Trigger AI import modal dialog for importing AI JSON with scaling option
  */
 function triggerAIImportDialog() {
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.json';
-    fileInput.style.display = 'none';
+    // Clear previous values and messages
+    document.getElementById('ai_json_input').value = '';
+    document.getElementById('ai_target_width').value = '';
+    document.getElementById('ai_json_name').textContent = '';
+    document.getElementById('ai_error_msg').textContent = '';
+    document.getElementById('ai_success_msg').textContent = '';
+    document.getElementById('ai_import_btn').disabled = true;
 
-    fileInput.addEventListener('change', function (event) {
+    // Set up file input event listener
+    const fileInput = document.getElementById('ai_json_input');
+    fileInput.addEventListener('change', function(event) {
         const file = event.target.files[0];
         if (file) {
-            importAIFloorplanJSON(file).then(() => {
-                document.body.removeChild(fileInput);
-            });
+            document.getElementById('ai_json_name').textContent = file.name;
+            validateAIImportForm();
         } else {
-            document.body.removeChild(fileInput);
+            document.getElementById('ai_json_name').textContent = '';
+            validateAIImportForm();
         }
     });
 
-    document.body.appendChild(fileInput);
-    fileInput.click();
+    // Set up width input event listener
+    const widthInput = document.getElementById('ai_target_width');
+    widthInput.addEventListener('input', validateAIImportForm);
+
+    // Set up import button event listener
+    const importBtn = document.getElementById('ai_import_btn');
+    importBtn.addEventListener('click', function() {
+        const file = fileInput.files[0];
+        const targetWidth = parseFloat(widthInput.value);
+        
+        if (file && targetWidth > 0) {
+            importAIFloorplanJSONWithScaling(file, targetWidth).then((success) => {
+                if (success) {
+                    // Close modal on success
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('aiImportModal'));
+                    if (modal) modal.hide();
+                }
+            });
+        }
+    });
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('aiImportModal'));
+    modal.show();
+}
+
+/**
+ * Validate AI import form and enable/disable import button
+ */
+function validateAIImportForm() {
+    const file = document.getElementById('ai_json_input').files[0];
+    const targetWidth = parseFloat(document.getElementById('ai_target_width').value);
+    const importBtn = document.getElementById('ai_import_btn');
+    
+    const isValid = file && targetWidth > 0;
+    importBtn.disabled = !isValid;
+}
+
+/**
+ * Import AI floorplan JSON with automatic scaling to target width
+ * @param {File} file
+ * @param {number} targetWidthM - Target width in meters
+ * @returns {Promise<boolean>}
+ */
+function importAIFloorplanJSONWithScaling(file, targetWidthM) {
+    return new Promise((resolve) => {
+        if (!file) {
+            console.error('No file provided for AI import');
+            document.getElementById('ai_error_msg').textContent = 'No file selected for AI import';
+            resolve(false);
+            return;
+        }
+
+        if (!targetWidthM || targetWidthM <= 0) {
+            document.getElementById('ai_error_msg').textContent = 'Please specify a valid target width';
+            resolve(false);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            try {
+                const jsonData = JSON.parse(e.target.result);
+                
+                // Validate the JSON structure
+                if (!validateAIImportData(jsonData)) {
+                    document.getElementById('ai_error_msg').textContent = 'Invalid AI JSON format. Expected {"walls": [[x0,y0,x1,y1], ...]}';
+                    resolve(false);
+                    return;
+                }
+
+                // Clear current plan
+                clearCurrentFloorplan();
+
+                // Import walls first (without scaling)
+                const importSuccess = importAIWallsData(jsonData);
+                if (!importSuccess) {
+                    document.getElementById('ai_error_msg').textContent = 'Failed to import wall data';
+                    resolve(false);
+                    return;
+                }
+
+                // Calculate current floorplan bounds after import
+                const currentBounds = calculateFloorplanBounds();
+                const currentWidthM = currentBounds.width / meter;
+                
+                if (currentWidthM <= 0) {
+                    document.getElementById('ai_error_msg').textContent = 'Invalid floorplan dimensions after import';
+                    resolve(false);
+                    return;
+                }
+
+                // Calculate and apply scale factor
+                const scaleFactor = targetWidthM / currentWidthM;
+                scaleAllElementsUniformly(scaleFactor);
+
+                // Save state
+                if (typeof save === 'function') save();
+
+                document.getElementById('ai_success_msg').textContent = `AI floorplan imported and scaled to ${targetWidthM}m width (scale factor: ${scaleFactor.toFixed(2)})`;
+                
+                if (typeof fonc_button === 'function') {
+                    try { fonc_button('select_mode'); } catch (e) { /* noop */ }
+                }
+                
+                // Center the imported plan in view
+                if (typeof centerFloorplanView === 'function') {
+                    try { centerFloorplanView(40); } catch (e) { /* noop */ }
+                }
+                
+                resolve(true);
+            } catch (err) {
+                console.error('Error importing AI JSON:', err);
+                document.getElementById('ai_error_msg').textContent = 'AI import failed: ' + err.message;
+                resolve(false);
+            }
+        };
+
+        reader.onerror = function () {
+            console.error('Error reading AI JSON file');
+            document.getElementById('ai_error_msg').textContent = 'Error reading AI JSON file';
+            resolve(false);
+        };
+
+        reader.readAsText(file);
+    });
+}
+
+/**
+ * Import walls data from AI JSON format
+ * @param {Object} jsonData - The parsed JSON data
+ * @returns {boolean} - Success status
+ */
+function importAIWallsData(jsonData) {
+    try {
+        // Create walls (skip malformed segments)
+        const created = [];
+        const defaultThick = typeof wallSize !== 'undefined' ? wallSize : 0.2;
+        const isFiniteNum = (v) => typeof v === 'number' && isFinite(v);
+        const dist2 = (a, b) => {
+            const dx = a.x - b.x, dy = a.y - b.y; return dx * dx + dy * dy;
+        };
+        let skipped = 0;
+        
+        for (let i = 0; i < jsonData.walls.length; i++) {
+            const seg = jsonData.walls[i];
+            // Validate structure and values
+            if (!Array.isArray(seg) || seg.length !== 4) { skipped++; continue; }
+            const start = { x: seg[0], y: seg[1] };
+            const end = { x: seg[2], y: seg[3] };
+            if (!isFiniteNum(start.x) || !isFiniteNum(start.y) || !isFiniteNum(end.x) || !isFiniteNum(end.y)) { skipped++; continue; }
+            // Reject zero-length or near-zero walls
+            if (dist2(start, end) < 1e-10) { skipped++; continue; }
+            try {
+                const w = new editor.wall(start, end, 'normal', defaultThick);
+                // Basic sanity on constructed wall
+                if (!w || !w.start || !w.end || !isFiniteNum(w.start.x) || !isFiniteNum(w.start.y) || !isFiniteNum(w.end.x) || !isFiniteNum(w.end.y)) { skipped++; continue; }
+                WALLS.push(w);
+                created.push(w);
+            } catch (e2) {
+                skipped++;
+            }
+        }
+
+        // Connect walls by matching endpoints (with small tolerance)
+        const tol = 1e-3;
+        const eq = (a, b) => (Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol);
+        for (let i = 0; i < created.length; i++) {
+            const wi = created[i];
+            for (let j = 0; j < created.length; j++) {
+                if (i === j) continue;
+                const wj = created[j];
+                if (!wi.parent && eq(wj.end, wi.start)) wi.parent = wj;
+                if (!wi.child && eq(wj.start, wi.end)) wi.child = wj;
+                if (wi.parent && wi.child) break;
+            }
+        }
+
+        // Compute wall geometry first
+        editor.architect(WALLS);
+
+        // If doors/windows provided, place them
+        try {
+            if (Array.isArray(jsonData.doors) || Array.isArray(jsonData.windows)) {
+                addOpeningsFromAI(jsonData);
+            }
+        } catch (openErr) {
+            console.warn('Opening placement warning:', openErr);
+        }
+
+        return true;
+    } catch (err) {
+        console.error('Error importing AI walls data:', err);
+        return false;
+    }
 }
 
 /**
