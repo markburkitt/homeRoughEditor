@@ -990,27 +990,25 @@ function _MOUSEMOVE(event) {
           var size = qSVG.measure(equationFollowers[i].wall.start, equationFollowers[i].wall.end);
           if (equationFollowers[i].type == "start") {
             equationFollowers[i].wall.start = intersectionFollowers;
-            if (size < 5) {
-              if (equationFollowers[i].wall.child == null) {
-                WALLS.splice(WALLS.indexOf(equationFollowers[i].wall), 1);
-                equationFollowers.splice(i, 1);
-              }
-            }
           }
           if (equationFollowers[i].type == "end") {
             equationFollowers[i].wall.end = intersectionFollowers;
-            if (size < 5) {
-              if (equationFollowers[i].wall.parent == null) {
-                WALLS.splice(WALLS.indexOf(equationFollowers[i].wall), 1);
-                equationFollowers.splice(i, 1);
-              }
-            }
+            // Note: Wall deletion is now deferred until mouse release to prevent premature deletion
           }
         }
       }
       // WALL COMPUTING, BLOCK FAMILY OF BINDERWALL IF NULL (START OR END) !!!!!
       editor.wallsComputing(WALLS, "move");
       Rooms = qSVG.polygonize(WALLS);
+      
+      // Re-append all door/window objects to ensure they stay in boxcarpentry after wall computing
+      for (var objIdx = 0; objIdx < OBJDATA.length; objIdx++) {
+        var obj = OBJDATA[objIdx];
+        if (obj && obj.graph && obj.family === 'inWall') {
+          obj.graph.remove();
+          $('#boxcarpentry').append(obj.graph);
+        }
+      }
 
       // OBJDATA(s) FOLLOW 90° EDGE SELECTED
       for (var rp = 0; rp < equationsObj.length; rp++) {
@@ -1023,9 +1021,15 @@ function _MOUSEMOVE(event) {
         if (qSVG.btwn(limits[0].x, binder.wall.start.x, binder.wall.end.x) && qSVG.btwn(limits[0].y, binder.wall.start.y, binder.wall.end.y) && qSVG.btwn(limits[1].x, binder.wall.start.x, binder.wall.end.x) && qSVG.btwn(limits[1].y, binder.wall.start.y, binder.wall.end.y)) {
           objTarget.limit = limits;
           objTarget.update();
+          // Re-append to ensure doors/windows stay on top after wall movement
+          if (objTarget.graph) {
+            objTarget.graph.remove();
+            $('#boxcarpentry').append(objTarget.graph);
+          }
         }
       }
-      // DELETING ALL OBJECT "INWALL" OVERSIZED INTO ITS EDGE (EDGE BY EDGE CONTROL)
+      // HANDLE ALL INWALL OBJECTS - INCLUDING DETACHED ONES
+      // First pass: handle objects currently attached to walls
       for (var k in WALLS) {
         var objWall = editor.objFromWall(WALLS[k]); // LIST OBJ ON EDGE
         for (var ob in objWall) {
@@ -1033,12 +1037,119 @@ function _MOUSEMOVE(event) {
           var eq = editor.createEquationFromWall(WALLS[k]);
           var limits = limitObj(eq, objTarget.size, objTarget);
           if (!qSVG.btwn(limits[0].x, WALLS[k].start.x, WALLS[k].end.x) || !qSVG.btwn(limits[0].y, WALLS[k].start.y, WALLS[k].end.y) || !qSVG.btwn(limits[1].x, WALLS[k].start.x, WALLS[k].end.x) || !qSVG.btwn(limits[1].y, WALLS[k].start.y, WALLS[k].end.y)) {
-            objTarget.graph.remove();
-            delete objTarget;
-            var indexObj = OBJDATA.indexOf(objTarget);
-            OBJDATA.splice(indexObj, 1);
+            // Try to resize the door/window to fit the wall instead of deleting it
+            var wallLength = qSVG.measure(WALLS[k].start, WALLS[k].end);
+            var maxObjectSize = wallLength - 20; // Leave some margin
+            
+            if (maxObjectSize > 20) { // Minimum viable size for door/window
+              objTarget.size = maxObjectSize;
+              var newLimits = limitObj(eq, objTarget.size, objTarget);
+              
+              // Check if resized object fits
+              if (qSVG.btwn(newLimits[0].x, WALLS[k].start.x, WALLS[k].end.x) && qSVG.btwn(newLimits[0].y, WALLS[k].start.y, WALLS[k].end.y) && qSVG.btwn(newLimits[1].x, WALLS[k].start.x, WALLS[k].end.x) && qSVG.btwn(newLimits[1].y, WALLS[k].start.y, WALLS[k].end.y)) {
+                objTarget.limit = newLimits;
+                objTarget.update();
+                // Re-append to maintain proper layering
+                if (objTarget.graph) {
+                  objTarget.graph.remove();
+                  $('#boxcarpentry').append(objTarget.graph);
+                }
+              } else {
+                // If resizing doesn't work, delete the object
+                var indexObj = OBJDATA.indexOf(objTarget);
+                objTarget.graph.remove();
+                if (indexObj !== -1) {
+                  OBJDATA.splice(indexObj, 1);
+                }
+              }
+            } else {
+              // Wall too small, delete the object
+              var indexObj = OBJDATA.indexOf(objTarget);
+              objTarget.graph.remove();
+              if (indexObj !== -1) {
+                OBJDATA.splice(indexObj, 1);
+              }
+            }
           }
         }
+      }
+      
+      // Second pass: handle detached inWall objects (not found by objFromWall)
+      var objectsToRemove = [];
+      for (var objIdx = 0; objIdx < OBJDATA.length; objIdx++) {
+        var obj = OBJDATA[objIdx];
+        if (obj && obj.family === 'inWall') {
+          var isAttachedToWall = false;
+          var bestWall = null;
+          var bestDistance = Infinity;
+          var bestPosition = null;
+          
+          // Check if object is attached to any wall
+          for (var wallIdx in WALLS) {
+            var wall = WALLS[wallIdx];
+            var eq = qSVG.createEquation(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+            var nearPoint = qSVG.nearPointOnEquation(eq, obj);
+            
+            if (nearPoint.distance < 0.01 && qSVG.btwn(obj.x, wall.start.x, wall.end.x) && qSVG.btwn(obj.y, wall.start.y, wall.end.y)) {
+              isAttachedToWall = true;
+              break;
+            }
+            
+            // Track closest wall for potential re-attachment
+            if (nearPoint.distance < bestDistance && qSVG.btwn(nearPoint.x, wall.start.x, wall.end.x) && qSVG.btwn(nearPoint.y, wall.start.y, wall.end.y)) {
+              bestDistance = nearPoint.distance;
+              bestWall = wall;
+              bestPosition = { x: nearPoint.x, y: nearPoint.y };
+            }
+          }
+          
+          // If object is detached, try to re-attach or remove it
+          if (!isAttachedToWall) {
+            if (bestWall && bestDistance < 50) { // Within 50px of a wall
+              var wallLength = qSVG.measure(bestWall.start, bestWall.end);
+              var maxObjectSize = wallLength - 20;
+              
+              // Check if there's enough space on the wall
+              if (maxObjectSize >= obj.size || (maxObjectSize > 20 && obj.size > maxObjectSize)) {
+                // Re-attach to the closest wall
+                obj.x = bestPosition.x;
+                obj.y = bestPosition.y;
+                
+                // Resize if necessary
+                if (obj.size > maxObjectSize && maxObjectSize > 20) {
+                  obj.size = maxObjectSize;
+                }
+                
+                // Update object position and limits
+                var eq = editor.createEquationFromWall(bestWall);
+                var limits = limitObj(eq, obj.size, obj);
+                obj.limit = limits;
+                obj.update();
+                
+                // Re-append to maintain proper layering
+                if (obj.graph) {
+                  obj.graph.remove();
+                  $('#boxcarpentry').append(obj.graph);
+                }
+              } else {
+                // Wall too small, mark for removal
+                objectsToRemove.push(objIdx);
+              }
+            } else {
+              // No suitable wall found, mark for removal
+              objectsToRemove.push(objIdx);
+            }
+          }
+        }
+      }
+      
+      // Remove objects that couldn't be re-attached (in reverse order to maintain indices)
+      for (var i = objectsToRemove.length - 1; i >= 0; i--) {
+        var objIndex = objectsToRemove[i];
+        if (OBJDATA[objIndex] && OBJDATA[objIndex].graph) {
+          OBJDATA[objIndex].graph.remove();
+        }
+        OBJDATA.splice(objIndex, 1);
       }
 
       equationsObj = []; // REINIT eqObj -> MAYBE ONE OR PLUS OF OBJDATA REMOVED !!!!
@@ -1502,7 +1613,14 @@ function _MOUSEUP(event) {
 
   if (mode == 'select_mode') {
     if (typeof (binder) != 'undefined') {
-      binder.remove();
+      // Handle different binder types properly
+      if (binder.type == 'node' && typeof binder.remove === 'function') {
+        binder.remove();
+      } else if (binder.graph && typeof binder.graph.remove === 'function') {
+        binder.graph.remove();
+      } else if (typeof binder.remove === 'function') {
+        binder.remove();
+      }
       delete binder;
       save();
     }
@@ -1702,7 +1820,37 @@ function _MOUSEUP(event) {
     if (typeof (binder) != 'undefined') {
       fonc_button('select_mode');
       if (binder.type == 'node') {
-
+        // Check for zero-length walls after node movement and clean them up
+        var wallsToDelete = [];
+        for (var k in WALLS) {
+          var wallSize = qSVG.measure(WALLS[k].start, WALLS[k].end);
+          if (wallSize < 1) {
+            wallsToDelete.push(WALLS[k]);
+          }
+        }
+        
+        // Delete zero-length walls with proper cleanup
+        for (var d = 0; d < wallsToDelete.length; d++) {
+          var wallToDelete = wallsToDelete[d];
+          // Clean up parent/child references before deletion
+          for (var cleanK in WALLS) {
+            if (isObjectsEquals(WALLS[cleanK].child, wallToDelete)) WALLS[cleanK].child = null;
+            if (isObjectsEquals(WALLS[cleanK].parent, wallToDelete)) WALLS[cleanK].parent = null;
+          }
+          // Remove the wall's visual representation
+          if (wallToDelete.graph) wallToDelete.graph.remove();
+          // Remove from WALLS array
+          WALLS.splice(WALLS.indexOf(wallToDelete), 1);
+        }
+        
+        // Clean up any lingering UI elements
+        $('#circlebinder').remove();
+        $('#boxbind').empty();
+        
+        // Rebuild architecture if walls were deleted
+        if (wallsToDelete.length > 0) {
+          editor.architect(WALLS);
+        }
       } // END BINDER NODE
 
       if (binder.type == 'segment') {

@@ -1632,19 +1632,26 @@ function inWallRib(wall, option = false) {
                 sizeText[n] = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 let startText = qSVG.middle(ribMaster[t][n - 1].coords.x, ribMaster[t][n - 1].coords.y, ribMaster[t][n].coords.x,
                     ribMaster[t][n].coords.y);
-                sizeText[n].setAttributeNS(null, 'x', startText.x);
-                sizeText[n].setAttributeNS(null, 'y', (startText.y) + shift);
-                sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
-                sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
-                sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
-                sizeText[n].textContent = valueText.toFixed(2);
-                if (sizeText[n].textContent < 1) {
-                    sizeText[n].setAttributeNS(null, 'font-size', '0.8em');
-                    sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
-                } else sizeText[n].setAttributeNS(null, 'font-size', '1em');
-                sizeText[n].setAttributeNS(null, 'stroke-width', '0.27px');
-                sizeText[n].setAttributeNS(null, 'fill', '#666666');
-                sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+                
+                // Check for valid coordinates before setting attributes
+                if (startText && !isNaN(startText.x) && !isNaN(startText.y)) {
+                    sizeText[n].setAttributeNS(null, 'x', startText.x);
+                    sizeText[n].setAttributeNS(null, 'y', (startText.y) + shift);
+                    sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
+                    sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
+                    sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
+                    sizeText[n].textContent = valueText.toFixed(2);
+                    if (sizeText[n].textContent < 1) {
+                        sizeText[n].setAttributeNS(null, 'font-size', '0.8em');
+                        sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
+                    } else sizeText[n].setAttributeNS(null, 'font-size', '1em');
+                    sizeText[n].setAttributeNS(null, 'stroke-width', '0.27px');
+                    sizeText[n].setAttributeNS(null, 'fill', '#666666');
+                    sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+                } else {
+                    // Skip creating text element if coordinates are invalid
+                    console.warn('Invalid coordinates for size text element:', startText);
+                }
 
                 $('#boxRib').append(sizeText[n]);
             }
@@ -1794,19 +1801,26 @@ function rib(shift = 5) {
                         sizeText[n] = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                         let startText = qSVG.middle(ribMaster[t][a][n - 1].coords.x, ribMaster[t][a][n - 1].coords.y, ribMaster[t][a][n].coords.x,
                             ribMaster[t][a][n].coords.y);
-                        sizeText[n].setAttributeNS(null, 'x', startText.x);
-                        sizeText[n].setAttributeNS(null, 'y', (startText.y) + (shiftValue));
-                        sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
-                        sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
-                        sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
-                        sizeText[n].textContent = valueText.toFixed(2);
-                        if (sizeText[n].textContent < 1) {
-                            sizeText[n].setAttributeNS(null, 'font-size', '0.73em');
-                            sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
-                        } else sizeText[n].setAttributeNS(null, 'font-size', '0.9em');
-                        sizeText[n].setAttributeNS(null, 'stroke-width', '0.2px');
-                        sizeText[n].setAttributeNS(null, 'fill', '#555555');
-                        sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+                        
+                        // Check for valid coordinates before setting attributes
+                        if (startText && !isNaN(startText.x) && !isNaN(startText.y)) {
+                            sizeText[n].setAttributeNS(null, 'x', startText.x);
+                            sizeText[n].setAttributeNS(null, 'y', (startText.y) + (shiftValue));
+                            sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
+                            sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
+                            sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
+                            sizeText[n].textContent = valueText.toFixed(2);
+                            if (sizeText[n].textContent < 1) {
+                                sizeText[n].setAttributeNS(null, 'font-size', '0.73em');
+                                sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
+                            } else sizeText[n].setAttributeNS(null, 'font-size', '0.9em');
+                            sizeText[n].setAttributeNS(null, 'stroke-width', '0.2px');
+                            sizeText[n].setAttributeNS(null, 'fill', '#555555');
+                            sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+                        } else {
+                            // Skip creating text element if coordinates are invalid
+                            console.warn('Invalid coordinates for size text element:', startText);
+                        }
 
                         $('#boxRib').append(sizeText[n]);
                     }
@@ -2013,6 +2027,11 @@ $('#grid_mode').click(function () {
 
 //  RETURN PATH(s) ARRAY FOR OBJECT + PROPERTY params => bindBox (false = open sideTool), move, resize, rotate
 function carpentryCalc(classObj, typeObj, sizeObj, thickObj, dividerObj = 10) {
+    // Validate input parameters to prevent NaN propagation
+    if (isNaN(sizeObj) || sizeObj <= 0) sizeObj = 60;
+    if (isNaN(thickObj) || thickObj <= 0) thickObj = 20;
+    if (isNaN(dividerObj) || dividerObj <= 0) dividerObj = 10;
+    
     let construc = [];
     construc.params = {};
     construc.params.bindBox = false;

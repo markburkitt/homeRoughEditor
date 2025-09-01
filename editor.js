@@ -521,20 +521,27 @@ var editor = {
 
           sizeText[n] = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           var startText = qSVG.middle(ribMaster[t][n - 1].coords.x, ribMaster[t][n - 1].coords.y, ribMaster[t][n].coords.x, ribMaster[t][n].coords.y);
-          sizeText[n].setAttributeNS(null, 'x', startText.x);
-          sizeText[n].setAttributeNS(null, 'y', (startText.y) + shift);
-          sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
-          sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
-          sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
-          sizeText[n].textContent = valueText.toFixed(2);
-          if (sizeText[n].textContent < 1) {
-            sizeText[n].setAttributeNS(null, 'font-size', '0.8em');
-            sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
+          
+          // Check for valid coordinates before setting attributes
+          if (startText && !isNaN(startText.x) && !isNaN(startText.y)) {
+            sizeText[n].setAttributeNS(null, 'x', startText.x);
+            sizeText[n].setAttributeNS(null, 'y', (startText.y) + shift);
+            sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
+            sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
+            sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
+            sizeText[n].textContent = valueText.toFixed(2);
+            if (sizeText[n].textContent < 1) {
+              sizeText[n].setAttributeNS(null, 'font-size', '0.8em');
+              sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
+            }
+            else sizeText[n].setAttributeNS(null, 'font-size', '1em');
+            sizeText[n].setAttributeNS(null, 'stroke-width', '0.4px');
+            sizeText[n].setAttributeNS(null, 'fill', '#666666');
+            sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+          } else {
+            // Skip creating text element if coordinates are invalid
+            console.warn('Invalid coordinates for size text element:', startText);
           }
-          else sizeText[n].setAttributeNS(null, 'font-size', '1em');
-          sizeText[n].setAttributeNS(null, 'stroke-width', '0.4px');
-          sizeText[n].setAttributeNS(null, 'fill', '#666666');
-          sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
 
           $('#boxRib').append(sizeText[n]);
         }
@@ -561,19 +568,30 @@ var editor = {
     this.width = (this.size / meter).toFixed(2);
     this.height = (this.thick / meter).toFixed(2);
 
-    var cc = carpentryCalc(classe, type, size, thick, value);
+    // Validate size and thick values before calling carpentryCalc
+    var validSize = isNaN(size) ? 60 : size;
+    var validThick = isNaN(thick) ? 20 : thick;
+    
+    var cc = carpentryCalc(classe, type, validSize, validThick, value);
     var blank;
 
     for (var tt = 0; tt < cc.length; tt++) {
       if (cc[tt].path) {
-        blank = qSVG.create('none', 'path', {
-          d: cc[tt].path,
-          "stroke-width": 1,
-          fill: cc[tt].fill,
-          stroke: cc[tt].stroke,
-          'stroke-dasharray': cc[tt].strokeDashArray,
-          opacity: cc[tt].opacity
-        });
+        // Validate path string before creating SVG element
+        var pathString = cc[tt].path;
+        if (pathString && !pathString.includes('NaN')) {
+          blank = qSVG.create('none', 'path', {
+            d: pathString,
+            "stroke-width": 1,
+            fill: cc[tt].fill,
+            stroke: cc[tt].stroke,
+            'stroke-dasharray': cc[tt].strokeDashArray,
+            opacity: cc[tt].opacity
+          });
+        } else {
+          console.warn('Skipping path creation due to NaN values:', pathString);
+          continue;
+        }
       }
       if (cc[tt].text) {
         blank = qSVG.create("none", "text", {
@@ -606,10 +624,21 @@ var editor = {
     this.update = function () {
       this.width = (this.size / meter).toFixed(2);
       this.height = (this.thick / meter).toFixed(2);
-      cc = carpentryCalc(this.class, this.type, this.size, this.thick, this.value);
+      
+      // Validate size and thick values before calling carpentryCalc
+      var validSize = isNaN(this.size) ? 60 : this.size;
+      var validThick = isNaN(this.thick) ? 20 : this.thick;
+      
+      cc = carpentryCalc(this.class, this.type, validSize, validThick, this.value);
       for (var tt = 0; tt < cc.length; tt++) {
         if (cc[tt].path) {
-          this.graph.find('path')[tt].setAttribute("d", cc[tt].path);
+          // Validate path string before setting attribute
+          var pathString = cc[tt].path;
+          if (pathString && !pathString.includes('NaN')) {
+            this.graph.find('path')[tt].setAttribute("d", pathString);
+          } else {
+            console.warn('Invalid path string with NaN values:', pathString);
+          }
         }
         else {
           // this.graph.find('text').context.textContent = cc[tt].text;

@@ -1063,6 +1063,8 @@ function addOpeningsFromAI(jsonData) {
         // Standardized sizes (pixels) based on meter scale
         const meterPx = 100;
         const standardDoorWidthPx = 0.6 * meterPx; // 0.6 m doors
+        const standardWindowWidthPx = 0.8 * meterPx; // 0.8 m windows
+        const minWindowSpacing = 0.2 * meterPx; // 0.2 m minimum spacing between windows
 
         // Find best wall by distance to the bounds midpoint (no intersection required)
         let best = null; // { wall, pos, widthAlongClamped, widthAlongDesired, angleSign }
@@ -1093,7 +1095,7 @@ function addOpeningsFromAI(jsonData) {
             // Distance from center to the wall segment
             const perpDist = Math.hypot(center.x - closest.x, center.y - closest.y);
 
-            // Desired width: doors use standard; windows use bounds projection clamped to wall extents
+            // Calculate available space for windows/doors
             const clamp = (v) => Math.max(0, Math.min(wlen, v));
             const sMinC = clamp(sMin);
             const sMaxC = clamp(sMax);
@@ -1101,73 +1103,133 @@ function addOpeningsFromAI(jsonData) {
             const widthAlongDesired = (item.type === 'simple') ? standardDoorWidthPx : widthAlongClamped;
 
             const angleSign = (pCenter > 0) ? 1 : 0;
-            const candidate = { wall, pos: { x: closest.x, y: closest.y, wall }, widthAlongClamped, widthAlongDesired, angleSign, score: perpDist };
+            const candidate = { wall, pos: { x: closest.x, y: closest.y, wall }, widthAlongClamped, widthAlongDesired, angleSign, score: perpDist, sMinC, sMaxC, ux, uy };
             if (!best || candidate.score < best.score) best = candidate;
         }
 
         if (!best) continue; // no walls available
 
-        // Build the in-wall object
-        try {
-            const wall = best.wall;
-            const angleDeg = qSVG.angleDeg(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
-            // Use standardized width for doors; clamped bounds width for windows
-            // Ensure it fits the usable span on the wall; shrink if necessary
-            const minWidthPx = 20; // don't create degenerate tiny openings
-            const spanFit = Math.max(0, best.widthAlongClamped);
-            let sizeForObj = Math.max(minWidthPx, Math.min(best.widthAlongDesired, spanFit));
-            const obj = new editor.obj2D('inWall', 'doorWindow', item.type, best.pos, 0, 0, sizeForObj, 'normal', wall.thick);
+        // For windows, create multiple default-sized windows instead of one large window
+        if (item.type === 'fix') { // windows
+            const availableSpace = best.widthAlongClamped;
+            const numWindows = Math.floor(availableSpace / (standardWindowWidthPx + minWindowSpacing));
+            
+            if (numWindows > 0) {
+                // Calculate total width needed for all windows and spacing
+                const totalWindowWidth = numWindows * standardWindowWidthPx;
+                const totalSpacingWidth = (numWindows - 1) * minWindowSpacing;
+                const totalNeededWidth = totalWindowWidth + totalSpacingWidth;
+                
+                // Center the window group in the available space
+                const startOffset = (availableSpace - totalNeededWidth) / 2;
+                
+                // Create each window
+                for (let i = 0; i < numWindows; i++) {
+                    try {
+                        const wall = best.wall;
+                        const angleDeg = qSVG.angleDeg(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+                        
+                        // Calculate position for this window
+                        const windowOffset = best.sMinC + startOffset + (i * (standardWindowWidthPx + minWindowSpacing)) + (standardWindowWidthPx / 2);
+                        const windowPos = {
+                            x: wall.start.x + best.ux * windowOffset,
+                            y: wall.start.y + best.uy * windowOffset,
+                            wall: wall
+                        };
+                        
+                        const obj = new editor.obj2D('inWall', 'doorWindow', item.type, windowPos, 0, 0, standardWindowWidthPx, 'normal', wall.thick);
 
-            let finalAngle = angleDeg;
-            let sign = 0;
-            if (best.angleSign === 1) { finalAngle += 180; sign = 1; }
+                        let finalAngle = angleDeg;
+                        let sign = 0;
+                        if (best.angleSign === 1) { finalAngle += 180; sign = 1; }
 
-            obj.x = best.pos.x;
-            obj.y = best.pos.y;
-            obj.angle = finalAngle;
-            obj.angleSign = sign;
+                        obj.x = windowPos.x;
+                        obj.y = windowPos.y;
+                        obj.angle = finalAngle;
+                        obj.angleSign = sign;
 
-            // Limits along the wall
-            let limits = limitObj(wall.equations.base, obj.size, best.pos);
-            if (Array.isArray(limits)) {
-                // verify both points are on the segment
-                const onSeg = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+                        // Limits along the wall
+                        let limits = limitObj(wall.equations.base, obj.size, windowPos);
+                        if (Array.isArray(limits)) {
+                            const onSeg = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+                            if (onSeg(limits[0]) && onSeg(limits[1])) {
+                                obj.limit = limits;
+                            }
+                        }
 
-                // If limits are off the segment, clamp size to fit the segment span
-                if (!(onSeg(limits[0]) && onSeg(limits[1]))) {
-                    // Compute clamped endpoints projected to the wall segment extents
-                    const clampToSeg = (pt) => ({
-                        x: qSVG.btwn(pt.x, wall.start.x, wall.end.x) ? pt.x : (Math.abs(pt.x - wall.start.x) < Math.abs(pt.x - wall.end.x) ? wall.start.x : wall.end.x),
-                        y: qSVG.btwn(pt.y, wall.start.y, wall.end.y) ? pt.y : (Math.abs(pt.y - wall.start.y) < Math.abs(pt.y - wall.end.y) ? wall.start.y : wall.end.y)
-                    });
-                    const c0 = clampToSeg(limits[0]);
-                    const c1 = clampToSeg(limits[1]);
-                    const clampedSpan = qSVG.measure(c0.x, c0.y, c1.x, c1.y);
-                    if (isFinite(clampedSpan) && clampedSpan > 0) {
-                        obj.size = Math.max(minWidthPx, Math.min(obj.size, clampedSpan));
-                        limits = limitObj(wall.equations.base, obj.size, best.pos);
+                        OBJDATA.push(obj);
+                        if (typeof $ !== 'undefined') {
+                            $('#boxcarpentry').append(obj.graph);
+                        }
+                        obj.update();
+                    } catch (e) {
+                        console.warn('Failed to create window object:', e);
                     }
                 }
+            }
+        } else {
+            // Original door logic (single door)
+            try {
+                const wall = best.wall;
+                const angleDeg = qSVG.angleDeg(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+                // Use standardized width for doors; clamped bounds width for windows
+                // Ensure it fits the usable span on the wall; shrink if necessary
+                const minWidthPx = 20; // don't create degenerate tiny openings
+                const spanFit = Math.max(0, best.widthAlongClamped);
+                let sizeForObj = Math.max(minWidthPx, Math.min(best.widthAlongDesired, spanFit));
+                const obj = new editor.obj2D('inWall', 'doorWindow', item.type, best.pos, 0, 0, sizeForObj, 'normal', wall.thick);
 
+                let finalAngle = angleDeg;
+                let sign = 0;
+                if (best.angleSign === 1) { finalAngle += 180; sign = 1; }
+
+                obj.x = best.pos.x;
+                obj.y = best.pos.y;
+                obj.angle = finalAngle;
+                obj.angleSign = sign;
+
+                // Limits along the wall
+                let limits = limitObj(wall.equations.base, obj.size, best.pos);
                 if (Array.isArray(limits)) {
-                    const onSeg2 = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
-                    if (onSeg2(limits[0]) && onSeg2(limits[1])) {
-                        obj.limit = limits;
-                        // SNAP: set position exactly to the midpoint of the limits on the wall
-                        const mid = qSVG.middle(limits[0].x, limits[0].y, limits[1].x, limits[1].y);
-                        obj.x = mid.x;
-                        obj.y = mid.y;
+                    // verify both points are on the segment
+                    const onSeg = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+
+                    // If limits are off the segment, clamp size to fit the segment span
+                    if (!(onSeg(limits[0]) && onSeg(limits[1]))) {
+                        // Compute clamped endpoints projected to the wall segment extents
+                        const clampToSeg = (pt) => ({
+                            x: qSVG.btwn(pt.x, wall.start.x, wall.end.x) ? pt.x : (Math.abs(pt.x - wall.start.x) < Math.abs(pt.x - wall.end.x) ? wall.start.x : wall.end.x),
+                            y: qSVG.btwn(pt.y, wall.start.y, wall.end.y) ? pt.y : (Math.abs(pt.y - wall.start.y) < Math.abs(pt.y - wall.end.y) ? wall.start.y : wall.end.y)
+                        });
+                        const c0 = clampToSeg(limits[0]);
+                        const c1 = clampToSeg(limits[1]);
+                        const clampedSpan = qSVG.measure(c0.x, c0.y, c1.x, c1.y);
+                        if (isFinite(clampedSpan) && clampedSpan > 0) {
+                            obj.size = Math.max(minWidthPx, Math.min(obj.size, clampedSpan));
+                            limits = limitObj(wall.equations.base, obj.size, best.pos);
+                        }
+                    }
+
+                    if (Array.isArray(limits)) {
+                        const onSeg2 = (pt) => qSVG.btwn(pt.x, wall.start.x, wall.end.x) && qSVG.btwn(pt.y, wall.start.y, wall.end.y);
+                        if (onSeg2(limits[0]) && onSeg2(limits[1])) {
+                            obj.limit = limits;
+                            // SNAP: set position exactly to the midpoint of the limits on the wall
+                            const mid = qSVG.middle(limits[0].x, limits[0].y, limits[1].x, limits[1].y);
+                            obj.x = mid.x;
+                            obj.y = mid.y;
+                        }
                     }
                 }
-            }
 
-            OBJDATA.push(obj);
-            if (typeof $ !== 'undefined') {
-                $('#boxcarpentry').append(obj.graph);
+                OBJDATA.push(obj);
+                if (typeof $ !== 'undefined') {
+                    $('#boxcarpentry').append(obj.graph);
+                }
+                obj.update();
+            } catch (e) {
+                console.warn('Failed to create opening object:', e);
             }
-            obj.update();
-        } catch (e) {
-            console.warn('Failed to create opening object:', e);
         }
     }
 
