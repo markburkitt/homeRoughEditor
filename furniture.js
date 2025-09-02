@@ -14,6 +14,7 @@ async function enterFurnitureMode() {
     $('#furniturePanel').show();
     $('#boxinfo').html('Furniture placement mode - select furniture to place');
     
+    
     // Load furniture data from JSON if not already loaded
     if (FURNITURE_DATA.length === 0) {
         await loadFurnitureData();

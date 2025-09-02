@@ -423,8 +423,12 @@ function _MOUSEMOVE(event) {
       }
     }
     if (objTarget !== false) {
-      if (typeof (binder) != 'undefined' && (binder.type == 'segment')) {
-        binder.graph.remove();
+      if (typeof (binder) != 'undefined' && (binder.type == 'segment' || binder.type == 'node')) {
+        if (binder.type == 'segment') {
+          binder.graph.remove();
+        } else if (binder.type == 'node') {
+          binder.remove();
+        }
         delete binder;
         cursor('default');
       }
@@ -606,6 +610,16 @@ function _MOUSEMOVE(event) {
   if (mode == 'furniture_placement_mode') {
     snap = calcul_snap(event, grid_snap);
     updateFurnitureCursor(snap.x, snap.y);
+    cursor('none');
+  }
+
+  //**************************************************************************
+  //**************        CAMERA PLACEMENT MODE *****************************
+  //**************************************************************************
+  
+  if (mode == 'camera_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    updateCameraCursor(snap.x, snap.y);
     cursor('none');
   }
 
@@ -1268,7 +1282,7 @@ function _MOUSEMOVE(event) {
 
   // Permit panning when floorplan mode is active even if background image tools are open
   const floorplanMode = !!window.__floorplanMode;
-  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage) {
+  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode' || mode == 'camera_placement_mode' || mode == 'camera_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage && !draggingCameraItem) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
     distX = (snap.xMouse - pox) * factor;
@@ -1355,6 +1369,21 @@ function _MOUSEDOWN(event) {
   }
 
   // *******************************************************************
+  // ********************   CAMERA PLACEMENT MODE   ******************
+  // *******************************************************************
+  if (mode == 'camera_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    // Begin potential panning; defer placement to mouseup if it's a click (not a drag)
+    drag = 'on';
+    pox = snap.xMouse;
+    poy = snap.yMouse;
+    // Remember initial position for click detection
+    window._pendingCameraPlacement = { x: snap.x, y: snap.y, xMouse: snap.xMouse, yMouse: snap.yMouse };
+    event.stopPropagation();
+    return;
+  }
+
+  // *******************************************************************
   // ********************   FURNITURE MODE (PAN)   ********************
   // *******************************************************************
   if (mode == 'furniture_mode') {
@@ -1365,6 +1394,24 @@ function _MOUSEDOWN(event) {
     // Avoid starting pan when clicking on a furniture item (drag is handled in furniture.js)
     const overFurniture = event.target && (event.target.closest && event.target.closest('.furniture-item'));
     if (!bgTools && !overFurniture) {
+      snap = calcul_snap(event, grid_snap);
+      drag = 'on';
+      pox = snap.xMouse;
+      poy = snap.yMouse;
+    }
+  }
+
+  // *******************************************************************
+  // ********************   CAMERA MODE (PAN)   **********************
+  // *******************************************************************
+  if (mode == 'camera_mode') {
+    // Start panning on mousedown in camera mode (unless background tools block)
+    const bgTools = document.getElementById('backgroundImageTools') &&
+      document.getElementById('backgroundImageTools').style.display !== 'none' &&
+      window.getComputedStyle(document.getElementById('backgroundImageTools')).display !== 'none';
+    // Avoid starting pan when clicking on a camera item (drag is handled in camera.js)
+    const overCamera = event.target && (event.target.closest && event.target.closest('.camera-item'));
+    if (!bgTools && !overCamera) {
       snap = calcul_snap(event, grid_snap);
       drag = 'on';
       pox = snap.xMouse;
@@ -1625,6 +1672,21 @@ function _MOUSEUP(event) {
       }
     } catch (_) { /* no-op */ }
     window._pendingFurniturePlacement = null;
+  }
+
+  // Handle deferred placement from camera_placement_mode
+  if (window._pendingCameraPlacement) {
+    try {
+      const snapUp = calcul_snap(event, grid_snap);
+      const dx = Math.abs(snapUp.xMouse - window._pendingCameraPlacement.xMouse);
+      const dy = Math.abs(snapUp.yMouse - window._pendingCameraPlacement.yMouse);
+      const moved = Math.sqrt(dx*dx + dy*dy);
+      if (moved < 5 && mode === 'camera_placement_mode') {
+        // Consider it a click: place camera at original snapped coords
+        placeCameraItem(window._pendingCameraPlacement.x, window._pendingCameraPlacement.y);
+      }
+    } catch (_) { /* no-op */ }
+    window._pendingCameraPlacement = null;
   }
 
   if (mode == 'select_mode') {

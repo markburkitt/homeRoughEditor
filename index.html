@@ -114,6 +114,7 @@
     <g id="boxcarpentry"></g>
     <g id="boxEnergy"></g>
     <g id="boxFurniture"></g>
+    <g id="boxCameras"></g>
     <g id="boxbind"></g>
     <g id="boxArea"></g>
     <g id="boxRib"></g>
@@ -441,6 +442,35 @@
         class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
   </div>
 
+  <div id="cameraPanel" class="leftBox">
+    <h2>Camera Placement</h2>
+    <hr />
+    <button class="btn btn-success fully" onclick="selectCameraPlacement();">
+      <i class="fa-solid fa-video"></i> Add Camera
+    </button>
+    <hr />
+    <button class="btn btn-info fully" onclick="exitCameraMode();">
+      <i class="fa fa-backward" aria-hidden="true"></i> Back to Selection
+    </button>
+  </div>
+
+  <div id="cameraTools" class="leftBox">
+    <h2>Camera Details</h2>
+    <hr />
+    <div id="cameraDetails">
+      <p><strong>ID:</strong> <span id="cameraId"></span></p>
+      <p><strong>Rotation:</strong> <span id="cameraRotationValue">0</span>°</p>
+      <input type="range" id="cameraRotationSlider" min="-180" max="180" value="0" step="1" class="range" style="width: 100%; margin: 10px 0;" />
+      <p><strong>Height:</strong> <span id="cameraHeightValue">1.2</span>M</p>
+      <input type="range" id="cameraHeightSlider" min="0.5" max="3.0" value="1.2" step="0.1" class="range" style="width: 100%; margin: 10px 0;" />
+    </div>
+    <br />
+    <button class="btn btn-danger fully" id="cameraRemove"><i class="fa fa-2x fa-trash" aria-hidden="true"></i></button>
+    <button class="btn btn-info" style="margin-top:50px"
+      onclick="hideCameraTools();"><i
+        class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
+  </div>
+
   <div id="backgroundImageTools" class="leftBox">
     <h2>Background Image Settings</h2>
     <hr />
@@ -613,6 +643,7 @@
       <li><button class="btn btn-light shadow fully " id="object_mode" style="display:none"
           onclick="$('.sub').hide();$('#energy_list').toggle(200);">ENERGY</button></li>
       <li><button class="btn btn-light shadow fully " id="furniture_mode" onclick="enterFurnitureMode();">FURNITURE</button></li>
+      <li><button class="btn btn-light shadow fully " id="camera_mode" onclick="enterCameraMode();">CAMERAS</button></li>
       <br />
 
       <li><button class="btn btn-light shadow fully " id="layer_mode"
@@ -663,6 +694,12 @@
           <div class="funkyradio-info">
             <input type="checkbox" id="showLayerFurniture" checked />
             <label for="showLayerFurniture">Furniture</label>
+          </div>
+        </div>
+        <div class="funkyradio" style="font-size:0.8em">
+          <div class="funkyradio-info">
+            <input type="checkbox" id="showLayerCameras" checked />
+            <label for="showLayerCameras">Cameras</label>
           </div>
         </div>
       </div>
@@ -847,5 +884,6 @@
 <script src="editor.js"></script>
 <script src="export.js"></script>
 <script src="furniture.js"></script>
+<script src="camera.js"></script>
 
 </html>

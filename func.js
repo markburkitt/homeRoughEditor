@@ -334,7 +334,7 @@ function save(boot = false) {
         return snapshot;
     })(__bgImgEl) : (__prevSnap && __prevSnap.backgroundImage ? __prevSnap.backgroundImage : null);
 
-    const snapshot = { objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData(), backgroundImage };
+    const snapshot = { objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData(), cameraData: getCameraData(), backgroundImage };
 
     // If caller requests suppression and we'd drop background image (DOM missing) while previous snapshot has one, skip pushing
     try {
@@ -466,6 +466,10 @@ function load(index = HISTORY.index, boot = false) {
     // Load furniture data if it exists
     if (historyTemp.furnitureData) {
         loadSavedFurnitureData(historyTemp.furnitureData);
+    }
+    // Load camera data if it exists
+    if (historyTemp.cameraData) {
+        loadSavedCameraData(historyTemp.cameraData);
     }
     // Restore background image properties if present and an image exists in DOM
     try {

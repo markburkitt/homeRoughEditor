@@ -2327,6 +2327,7 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             wall_thickness: wallThickness,
             floors: [],
             walls: [],
+            cameras: [],
             builtins: [],
             styles: []
         };
@@ -2598,6 +2599,34 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             name: "unfurnished",
             furniture: []
         });
+
+        // Convert camera items to Blender format
+        const cameraArray = [];
+        if (typeof CAMERA_ITEMS !== 'undefined' && Array.isArray(CAMERA_ITEMS)) {
+            for (let i = 0; i < CAMERA_ITEMS.length; i++) {
+                const camera = CAMERA_ITEMS[i];
+                if (camera.x !== undefined && camera.y !== undefined) {
+                    // Convert position from pixels to meters and apply center offset
+                    const x = parseFloat(((camera.x / 60) - centerX).toFixed(1));
+                    const y = parseFloat(((camera.y / 60) - centerY).toFixed(1));
+                    
+                    // Get rotation and height
+                    const rotation = (-camera.rotation || 0) - 90;
+                    const height = camera.height || 1.2;
+                    
+                    cameraArray.push({
+                        id: camera.id.toString(),
+                        option: "01",
+                        position: [x, y],
+                        height: height,
+                        rotation: rotation
+                    });
+                }
+            }
+        }
+        
+        // Add cameras to blender data
+        blenderData.cameras = cameraArray;
 
         // Convert to JSON string with custom formatting for compact coordinate arrays
         let jsonString = JSON.stringify(blenderData, null, '\t');
