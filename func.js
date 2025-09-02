@@ -2569,13 +2569,14 @@ document.getElementById('import_image_mode').addEventListener('click', function(
 (function(){
     const jsonInput = document.getElementById('combined_json_input');
     const imageInput = document.getElementById('combined_image_input');
+    const widthInput = document.getElementById('combined_target_width');
     const importBtn = document.getElementById('combined_import_btn');
     const jsonName = document.getElementById('combined_json_name');
     const imageName = document.getElementById('combined_image_name');
     const errMsg = document.getElementById('combined_error_msg');
     const okMsg = document.getElementById('combined_success_msg');
 
-    if (!(jsonInput && imageInput && importBtn)) return; // Modal not present
+    if (!(jsonInput && imageInput && importBtn && widthInput)) return; // Modal not present
 
     function resetMessages() {
         if (errMsg) errMsg.textContent = '';
@@ -2585,6 +2586,7 @@ document.getElementById('import_image_mode').addEventListener('click', function(
     function validateEnable() {
         const jf = jsonInput.files && jsonInput.files[0];
         const imf = imageInput.files && imageInput.files[0];
+        const targetWidth = parseFloat(widthInput.value);
         let ok = true;
         resetMessages();
         if (jf) {
@@ -2595,6 +2597,11 @@ document.getElementById('import_image_mode').addEventListener('click', function(
         if (imf) {
             const validImg = /\.(png|jpe?g)$/i.test(imf.name);
             if (!validImg) { ok = false; if (errMsg) errMsg.textContent = 'Selected image must be PNG or JPG'; }
+        }
+        // Width is required and must be positive
+        if (!targetWidth || targetWidth <= 0) {
+            ok = false;
+            if (errMsg && !errMsg.textContent) errMsg.textContent = 'Please specify a valid target width';
         }
         importBtn.disabled = !ok;
     }
@@ -2607,6 +2614,7 @@ document.getElementById('import_image_mode').addEventListener('click', function(
         if (imageName) imageName.textContent = this.files[0] ? this.files[0].name : '';
         validateEnable();
     });
+    widthInput.addEventListener('input', validateEnable);
 
     importBtn.addEventListener('click', async function(){
         resetMessages();
@@ -2623,14 +2631,17 @@ document.getElementById('import_image_mode').addEventListener('click', function(
 
         const jf = jsonInput.files[0];
         const imf = imageInput.files[0];
+        const targetWidth = parseFloat(widthInput.value);
         importBtn.disabled = true;
         importBtn.textContent = 'Importing...';
 
         try {
-            // Use AI importer exclusively per request
-            const jsonOk = await (typeof importAIFloorplanJSON === 'function' ? importAIFloorplanJSON(jf) : Promise.resolve(false));
+            // Use AI importer with scaling functionality
+            const jsonOk = await (typeof importAIFloorplanJSONWithScaling === 'function' ? 
+                importAIFloorplanJSONWithScaling(jf, targetWidth) : 
+                Promise.resolve(false));
             if (!jsonOk) {
-                if (errMsg) errMsg.textContent = 'Failed to import floorplan JSON using AI format.';
+                if (errMsg) errMsg.textContent = 'Failed to import and scale floorplan JSON.';
                 importBtn.textContent = 'Import';
                 validateEnable();
                 return;
@@ -2641,15 +2652,19 @@ document.getElementById('import_image_mode').addEventListener('click', function(
             if (imf) {
                 imgOk = await (typeof importBackgroundImage === 'function' ? importBackgroundImage(imf) : Promise.resolve(false));
                 if (!imgOk) {
-                    if (errMsg) errMsg.textContent = 'Floorplan JSON loaded, but background image import failed.';
+                    if (errMsg) errMsg.textContent = 'Floorplan JSON loaded and scaled, but background image import failed.';
                     importBtn.textContent = 'Import';
                     validateEnable();
                     return;
                 }
             }
 
-            if (okMsg) okMsg.textContent = imf ? 'Imported successfully!' : 'Floorplan JSON imported successfully.';
-            if (typeof $ !== 'undefined') $('#boxinfo').html(imf ? 'Floorplan and image imported successfully' : 'Floorplan JSON imported successfully');
+            if (okMsg) okMsg.textContent = imf ? 
+                `Imported and scaled to ${targetWidth}m width successfully!` : 
+                `Floorplan JSON imported and scaled to ${targetWidth}m width successfully.`;
+            if (typeof $ !== 'undefined') $('#boxinfo').html(imf ? 
+                'Floorplan and image imported and scaled successfully' : 
+                'Floorplan JSON imported and scaled successfully');
 
             // Close modal after short delay and clear inputs
             setTimeout(function(){
@@ -2660,6 +2675,7 @@ document.getElementById('import_image_mode').addEventListener('click', function(
                 }
                 jsonInput.value = '';
                 imageInput.value = '';
+                widthInput.value = '';
                 if (jsonName) jsonName.textContent = '';
                 if (imageName) imageName.textContent = '';
                 importBtn.textContent = 'Import';

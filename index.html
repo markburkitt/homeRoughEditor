@@ -156,6 +156,14 @@
             <input type="file" id="combined_image_input" accept="image/png,image/jpeg,image/jpg" class="form-control" />
             <small id="combined_image_name" class="form-text text-muted"></small>
           </div>
+          <div class="mb-3">
+            <label class="form-label">Floorplan Width (meters)</label>
+            <div class="input-group">
+              <input type="number" id="combined_target_width" min="0.1" step="0.1" class="form-control" placeholder="e.g. 10.5" />
+              <span class="input-group-text">m</span>
+            </div>
+            <small class="form-text text-muted">The imported floorplan will be scaled to this width</small>
+          </div>
           <div id="combined_error_msg" class="text-danger small"></div>
           <div id="combined_success_msg" class="text-success small"></div>
         </div>
