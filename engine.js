@@ -21,9 +21,14 @@ document.querySelector('#panel').addEventListener('mousemove', function (event) 
 });
 
 window.addEventListener('resize', function (event) {
-  width_viewbox = $('#lin').width();
-  height_viewbox = $('#lin').height();
-  document.querySelector('#lin').setAttribute('viewBox', originX_viewbox + ' ' + originY_viewbox + ' ' + width_viewbox + ' ' + height_viewbox)
+  // Update the pixel dimensions for coordinate calculations
+  taille_w = $('#lin').width();
+  taille_h = $('#lin').height();
+  // Recalculate the factor for coordinate transformation
+  factor = width_viewbox / taille_w;
+  // Update offset for mouse coordinate calculations
+  offset = $('#lin').offset();
+  // Keep the viewBox coordinates unchanged to maintain the design coordinate system
 });
 
 // *****************************************************************************************************
@@ -846,6 +851,13 @@ function _MOUSEMOVE(event) {
         $('#circlebinder').attr({ "class": "circleGum", cx: coords.x, cy: coords.y });
         cursor('grab');
       } else {
+        // Validate coordinates before assignment
+        if (isNaN(snap.x) || isNaN(snap.y)) {
+          console.warn('Invalid snap coordinates detected:', snap);
+          return; // Exit early to prevent NaN propagation
+        }
+        coords.x = snap.x;
+        coords.y = snap.y;
         if (magnetic != false) {
           if (magnetic == "H") snap.x = coords.x;
           else snap.y = coords.y;
@@ -878,6 +890,8 @@ function _MOUSEMOVE(event) {
       }
       binder.data = coords;
       editor.wallsComputing(WALLS, false); // UPDATE FALSE
+      // Reapply floorplan opacity after wall computing
+      if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
 
       for (var k in wallListObj) {
         var wall = wallListObj[k].wall;
@@ -999,6 +1013,8 @@ function _MOUSEMOVE(event) {
       }
       // WALL COMPUTING, BLOCK FAMILY OF BINDERWALL IF NULL (START OR END) !!!!!
       editor.wallsComputing(WALLS, "move");
+      // Reapply floorplan opacity after wall computing during drag
+      if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
       Rooms = qSVG.polygonize(WALLS);
       
       // Re-append all door/window objects to ensure they stay in boxcarpentry after wall computing
@@ -1736,6 +1752,8 @@ function _MOUSEUP(event) {
       binder.remove();
       delete binder;
       editor.architect(WALLS);
+      // Reapply floorplan opacity after wall rebuild
+      if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
       save();
     }
     fonc_button('select_mode');
@@ -1776,6 +1794,8 @@ function _MOUSEUP(event) {
       var wall = new editor.wall({ x: pox, y: poy }, { x: x, y: y }, "normal", sizeWall);
       WALLS.push(wall);
       editor.architect(WALLS);
+      // Reapply floorplan opacity after wall rebuild
+      if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
 
       if (document.getElementById("multi").checked && !wallEndConstruc) {
         cursor('validation');
@@ -1850,6 +1870,8 @@ function _MOUSEUP(event) {
         // Rebuild architecture if walls were deleted
         if (wallsToDelete.length > 0) {
           editor.architect(WALLS);
+          // Reapply floorplan opacity after wall rebuild
+          if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
         }
       } // END BINDER NODE
 

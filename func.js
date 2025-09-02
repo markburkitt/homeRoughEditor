@@ -42,8 +42,8 @@ poy = 0;
 segment = 0;
 xpath = 0;
 ypath = 0;
-let width_viewbox = taille_w;
-let height_viewbox = taille_h;
+let width_viewbox = 1100; // Fixed SVG coordinate system width
+let height_viewbox = 700;  // Fixed SVG coordinate system height
 let ratio_viewbox = height_viewbox / width_viewbox;
 let originX_viewbox = 0;
 let originY_viewbox = 0;
@@ -371,7 +371,37 @@ function save(boot = false) {
         $('#redo').addClass('disabled');
     }
     HISTORY.push(JSON.stringify(snapshot));
-    localStorage.setItem('history', JSON.stringify(HISTORY));
+    
+    // Manage history size to prevent localStorage quota exceeded
+    const MAX_HISTORY_SIZE = 50; // Limit to 50 snapshots
+    if (HISTORY.length > MAX_HISTORY_SIZE) {
+        const removeCount = HISTORY.length - MAX_HISTORY_SIZE;
+        HISTORY.splice(0, removeCount);
+        HISTORY.index = Math.max(0, HISTORY.index - removeCount);
+    }
+    
+    try {
+        localStorage.setItem('history', JSON.stringify(HISTORY));
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            console.warn('localStorage quota exceeded, clearing old history');
+            // Keep only the last 10 snapshots
+            HISTORY = HISTORY.slice(-10);
+            HISTORY.index = Math.min(HISTORY.index, HISTORY.length - 1);
+            try {
+                localStorage.setItem('history', JSON.stringify(HISTORY));
+            } catch (e2) {
+                console.error('Failed to save even reduced history:', e2);
+                // Clear history entirely as last resort
+                HISTORY = [];
+                HISTORY.index = 0;
+                localStorage.removeItem('history');
+            }
+        } else {
+            throw e;
+        }
+    }
+    
     HISTORY.index++;
     // Log when state is saved to history along with current floorplan image metrics
     try {
@@ -497,6 +527,8 @@ function load(index = HISTORY.index, boot = false) {
         }
     } catch(_) {}
     editor.architect(WALLS);
+    // Reapply floorplan opacity after wall rebuild
+    if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
     editor.showScaleBox();
     rib();
 
@@ -518,8 +550,24 @@ function load(index = HISTORY.index, boot = false) {
     } catch(_) {}
 }
 
+// Initialize SVG with fixed viewBox dimensions
 $('svg').each(function () {
     $(this)[0].setAttribute('viewBox', originX_viewbox + ' ' + originY_viewbox + ' ' + width_viewbox + ' ' + height_viewbox)
+});
+
+// Update coordinate transformation factor
+factor = width_viewbox / taille_w;
+
+// Add window resize handler to update coordinate transformation
+window.addEventListener('resize', function (event) {
+  // Update the pixel dimensions for coordinate calculations
+  taille_w = $('#lin').width();
+  taille_h = $('#lin').height();
+  // Recalculate the factor for coordinate transformation
+  factor = width_viewbox / taille_w;
+  // Update offset for mouse coordinate calculations
+  offset = $('#lin').offset();
+  // Keep the viewBox coordinates unchanged to maintain the design coordinate system
 });
 
 // **************************************************************************
@@ -784,6 +832,62 @@ document.getElementById('report_mode').addEventListener("click", function () {
 
 });
 
+// Global variable to store current floorplan opacity
+window.currentFloorplanOpacity = 1.0;
+
+// Function to update floorplan opacity
+function updateFloorplanOpacity(value) {
+    const opacity = parseFloat(value);
+    const opacityPercent = Math.round(opacity * 100);
+    
+    // Store the current opacity globally
+    window.currentFloorplanOpacity = opacity;
+    
+    // Update the display value
+    document.getElementById('floorplanOpacityValue').textContent = opacityPercent + '%';
+    
+    // Apply the opacity
+    applyFloorplanOpacity(opacity);
+    
+    // Save the state
+    if (typeof save === 'function') save();
+}
+
+// Function to apply floorplan opacity to all elements
+function applyFloorplanOpacity(opacity = null) {
+    if (opacity === null) opacity = window.currentFloorplanOpacity || 1.0;
+    
+    // Update opacity of all walls - target the actual SVG elements
+    const wallLines = document.querySelectorAll('#lin line');
+    wallLines.forEach(line => {
+        // Skip background and measurement lines
+        if (!line.getAttribute('data-bg') && !line.getAttribute('data-measurement')) {
+            line.setAttribute('opacity', opacity);
+        }
+    });
+    
+    // Update opacity of all wall paths
+    const wallPaths = document.querySelectorAll('#lin path');
+    wallPaths.forEach(path => {
+        // Skip room floors and background elements
+        if (!path.getAttribute('data-room') && !path.getAttribute('data-bg') && !path.getAttribute('data-measurement')) {
+            path.setAttribute('opacity', opacity);
+        }
+    });
+    
+    // Update opacity of all room floors
+    const floors = document.querySelectorAll('#lin polygon');
+    floors.forEach(floor => {
+        floor.setAttribute('opacity', opacity);
+    });
+    
+    // Update opacity of wall groups if they exist
+    const wallGroups = document.querySelectorAll('#lin g[data-wall]');
+    wallGroups.forEach(group => {
+        group.setAttribute('opacity', opacity);
+    });
+}
+
 document.getElementById('wallWidth').addEventListener("input", function () {
     let sliderValue = this.value;
     binder.wall.thick = sliderValue;
@@ -796,6 +900,9 @@ document.getElementById('wallWidth').addEventListener("input", function () {
     }
     rib();
     document.getElementById("wallWidthVal").textContent = sliderValue;
+    
+    // Reapply floorplan opacity after wall rebuild
+    applyFloorplanOpacity();
 });
 
 document.getElementById("bboxTrash").addEventListener("click", function () {
@@ -1117,6 +1224,8 @@ document.getElementById("wallTrash").addEventListener("click", function () {
     wall.graph.remove();
     binder.graph.remove();
     editor.architect(WALLS);
+    // Reapply floorplan opacity after wall rebuild
+    if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
     rib();
     mode = "select_mode";
     $('#panel').show(200);
@@ -1360,10 +1469,28 @@ function calcul_snap(event, state) {
         eX = event.pageX;
         eY = event.pageY;
     }
+    
+    // Validate factor and offset before calculations
+    if (isNaN(factor) || factor <= 0) {
+        console.warn('Invalid factor detected:', factor);
+        factor = 1; // Fallback value
+    }
+    if (!offset || isNaN(offset.left) || isNaN(offset.top)) {
+        console.warn('Invalid offset detected:', offset);
+        offset = { left: 0, top: 0 }; // Fallback value
+    }
+    if (isNaN(originX_viewbox)) originX_viewbox = 0;
+    if (isNaN(originY_viewbox)) originY_viewbox = 0;
+    
     x_mouse = (eX * factor) - (offset.left * factor) + originX_viewbox;
     y_mouse = (eY * factor) - (offset.top * factor) + originY_viewbox;
 
+    // Validate calculated mouse coordinates
+    if (isNaN(x_mouse)) x_mouse = 0;
+    if (isNaN(y_mouse)) y_mouse = 0;
+
     if (state === 'on') {
+        if (isNaN(grid) || grid <= 0) grid = 10; // Fallback grid size
         x_grid = Math.round(x_mouse / grid) * grid;
         y_grid = Math.round(y_mouse / grid) * grid;
     }
@@ -1371,6 +1498,11 @@ function calcul_snap(event, state) {
         x_grid = x_mouse;
         y_grid = y_mouse;
     }
+    
+    // Final validation of return values
+    if (isNaN(x_grid)) x_grid = 0;
+    if (isNaN(y_grid)) y_grid = 0;
+    
     return {
         x: x_grid,
         y: y_grid,
@@ -2636,27 +2768,75 @@ document.getElementById('import_image_mode').addEventListener('click', function(
         importBtn.textContent = 'Importing...';
 
         try {
-            // Use AI importer with scaling functionality
+            // Import JSON first to get the original floorplan dimensions
             const jsonOk = await (typeof importAIFloorplanJSONWithScaling === 'function' ? 
                 importAIFloorplanJSONWithScaling(jf, targetWidth) : 
                 Promise.resolve(false));
             if (!jsonOk) {
-                if (errMsg) errMsg.textContent = 'Failed to import and scale floorplan JSON.';
+                if (errMsg) errMsg.textContent = 'Failed to import floorplan JSON.';
                 importBtn.textContent = 'Import';
                 validateEnable();
                 return;
             }
 
-            // Image is optional: only try importing if provided
+            // Image is optional: import if provided and apply scaling immediately
             let imgOk = true;
             if (imf) {
                 imgOk = await (typeof importBackgroundImage === 'function' ? importBackgroundImage(imf) : Promise.resolve(false));
+                
                 if (!imgOk) {
                     if (errMsg) errMsg.textContent = 'Floorplan JSON loaded and scaled, but background image import failed.';
                     importBtn.textContent = 'Import';
                     validateEnable();
                     return;
                 }
+
+                // Scale the background image to match the target width directly
+                // Use setTimeout to ensure scaling happens after any default sizing
+                setTimeout(() => {
+                    const bgImg = document.getElementById('backgroundImage');
+                    if (bgImg) {
+                        // Get current floorplan bounds after scaling
+                        const finalBounds = (typeof calculateFloorplanBounds === 'function') ? calculateFloorplanBounds() : null;
+                        if (finalBounds) {
+                            // Get current background image properties after any default sizing
+                            const currentImgWidth = parseFloat(bgImg.getAttribute('width')) || 1100;
+                            const currentImgHeight = parseFloat(bgImg.getAttribute('height')) || 700;
+                            const currentImgX = parseFloat(bgImg.getAttribute('x')) || 0;
+                            const currentImgY = parseFloat(bgImg.getAttribute('y')) || 0;
+                            
+                            // Calculate what the background image width should be in pixels to match target
+                            const targetImgWidthPixels = targetWidth * (typeof meter !== 'undefined' ? meter : 60);
+                            const scaleFactor = targetImgWidthPixels / currentImgWidth;
+                            
+                            
+                            // Use the floorplan bounds as origin (same as scaleAllElementsUniformly)
+                            const originX = finalBounds.minX;
+                            const originY = finalBounds.minY;
+                            
+                            const newImgWidth = currentImgWidth * scaleFactor;
+                            const newImgHeight = currentImgHeight * scaleFactor;
+                            
+                            // Center the background image relative to the floorplan bounds
+                            const floorplanCenterX = finalBounds.minX + finalBounds.width / 2;
+                            const floorplanCenterY = finalBounds.minY + finalBounds.height / 2;
+                            
+                            const newImgX = floorplanCenterX - newImgWidth / 2;
+                            const newImgY = floorplanCenterY - newImgHeight / 2;
+                            
+                            bgImg.setAttribute('width', newImgWidth);
+                            bgImg.setAttribute('height', newImgHeight);
+                            bgImg.setAttribute('x', newImgX);
+                            bgImg.setAttribute('y', newImgY);
+                            
+                            
+                            // Force save to prevent reversion
+                            if (typeof save === 'function') {
+                                save();
+                            }
+                        }
+                    }
+                }, 200);
             }
 
             if (okMsg) okMsg.textContent = imf ? 

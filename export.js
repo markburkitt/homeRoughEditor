@@ -562,6 +562,8 @@ function scaleAllElementsUniformly(scaleFactor) {
         // Rebuild walls with new coordinates - this triggers wall equations recalculation
         if (typeof editor !== 'undefined' && editor.architect) {
             editor.architect(WALLS);
+            // Reapply floorplan opacity after wall rebuild
+            if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
         }
         
         // Rebuild rooms with new wall positions
@@ -875,6 +877,8 @@ function importAIWallsData(jsonData) {
 
         // Compute wall geometry first
         editor.architect(WALLS);
+        // Reapply floorplan opacity after wall rebuild
+        if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
 
         // If doors/windows provided, place them
         try {
@@ -965,6 +969,8 @@ function importAIFloorplanJSON(file) {
 
                 // Compute wall geometry first
                 editor.architect(WALLS);
+                // Reapply floorplan opacity after wall rebuild
+                if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
 
                 // If doors/windows provided, place them
                 try {
@@ -1586,6 +1592,8 @@ function loadFloorplanData(jsonData) {
         // Rebuild the visual representation
         if (typeof editor !== 'undefined' && editor.architect) {
             editor.architect(WALLS);
+            // Reapply floorplan opacity after wall rebuild
+            if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
         }
         
         if (typeof editor !== 'undefined' && editor.showScaleBox) {
@@ -1971,37 +1979,8 @@ function addBackgroundImage(imageDataUrl, fileName) {
                 // Reveal now that proper size/position are applied
                 imageElement.setAttribute('opacity', String(previousGeometry && previousGeometry.opacity != null ? previousGeometry.opacity : 0.7));
 
-                // If we didn't capture previousGeometry from an existing element, try restoring
-                // geometry from the most recent HISTORY snapshot that matches this image by href or fileName.
-                try {
-                    if (!previousGeometry && typeof localStorage !== 'undefined') {
-                        const histStr = localStorage.getItem('history');
-                        if (histStr) {
-                            const histArr = JSON.parse(histStr);
-                            for (let i = histArr.length - 1; i >= 0; i--) {
-                                try {
-                                    const snap = JSON.parse(histArr[i]);
-                                    if (snap && snap.backgroundImage) {
-                                        const hrefMatch = (snap.backgroundImage.href === imageDataUrl);
-                                        const nameMatch = (fileName && snap.backgroundImage.fileName && String(fileName).toLowerCase() === String(snap.backgroundImage.fileName).toLowerCase());
-                                        if (hrefMatch || nameMatch) {
-                                        const props = snap.backgroundImage;
-                                        if (props.width != null) imageElement.setAttribute('width', props.width);
-                                        if (props.height != null) imageElement.setAttribute('height', props.height);
-                                        if (props.x != null) imageElement.setAttribute('x', props.x);
-                                        if (props.y != null) imageElement.setAttribute('y', props.y);
-                                        if (props.opacity != null) imageElement.setAttribute('opacity', props.opacity);
-                                        if (typeof console !== 'undefined' && console.debug) {
-                                            console.debug('[addBackgroundImage] restored geometry from HISTORY snapshot', { hrefMatch, nameMatch });
-                                        }
-                                        break;
-                                        }
-                                    }
-                                } catch(_) { /* skip malformed entry */ }
-                            }
-                        }
-                    }
-                } catch(_) { /* ignore history restore errors */ }
+                // Skip localStorage restoration - background images should only use default sizing
+                // Properties will be managed through floorplan state only
 
                 // Persist correct geometry now that it's set
                 try {
@@ -2348,8 +2327,7 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             wall_thickness: wallThickness,
             floors: [],
             walls: [],
-            doors: [],
-            windows: [],
+            builtins: [],
             styles: []
         };
 
@@ -2557,13 +2535,13 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 
                 // Categorize objects based on their type
                 if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple') {
-                    blenderData.doors.push({
+                    blenderData.builtins.push({
                         asset: 'OpenDoor',
                         position: [x, y],
                         rotation: obj.angle || 0
                     });
                 } else if (obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
-                    blenderData.windows.push({
+                    blenderData.builtins.push({
                         asset: 'WindowPanel',
                         position: [x, y],
                         rotation: obj.angle || 0
@@ -2614,6 +2592,12 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                 furniture: furnitureArray
             });
         }
+
+        // Add unfurnished style
+        blenderData.styles.push({
+            name: "unfurnished",
+            furniture: []
+        });
 
         // Convert to JSON string with custom formatting for compact coordinate arrays
         let jsonString = JSON.stringify(blenderData, null, '\t');

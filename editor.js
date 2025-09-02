@@ -34,6 +34,29 @@ var editor = {
     // IF ACTION == MOVE -> equation2 exist !!!!!
     $('#boxwall').empty();
     $('#boxArea').empty();
+    
+    // Validate WALLS array and coordinates
+    if (!WALLS || !Array.isArray(WALLS)) {
+      console.warn('Invalid WALLS array in wallsComputing');
+      return;
+    }
+    
+    // Check for NaN coordinates in walls before processing
+    for (let i = 0; i < WALLS.length; i++) {
+      const wall = WALLS[i];
+      if (!wall || !wall.start || !wall.end) {
+        console.warn('Invalid wall structure at index', i);
+        continue;
+      }
+      if (isNaN(wall.start.x) || isNaN(wall.start.y) || isNaN(wall.end.x) || isNaN(wall.end.y)) {
+        console.warn('NaN coordinates detected in wall', i, wall);
+        // Try to fix NaN coordinates or skip this wall
+        if (isNaN(wall.start.x)) wall.start.x = 0;
+        if (isNaN(wall.start.y)) wall.start.y = 0;
+        if (isNaN(wall.end.x)) wall.end.x = 0;
+        if (isNaN(wall.end.y)) wall.end.y = 0;
+      }
+    }
 
     for (var vertice = 0; vertice < WALLS.length; vertice++) {
       var wall = WALLS[vertice];
@@ -174,8 +197,15 @@ var editor = {
           var interUp = qSVG.intersectionOfEquations(eqP, eqWallUp, "object");
           var interDw = qSVG.intersectionOfEquations(eqP, eqWallDw, "object");
         }
-        wall.coords = [interUp, interDw];
-        dWay = "M" + interUp.x + "," + interUp.y + " L" + interDw.x + "," + interDw.y + " ";
+        
+        // Validate coordinates before creating path
+        if (interUp && !isNaN(interUp.x) && !isNaN(interUp.y) && interDw && !isNaN(interDw.x) && !isNaN(interDw.y)) {
+          wall.coords = [interUp, interDw];
+          dWay = "M" + interUp.x + "," + interUp.y + " L" + interDw.x + "," + interDw.y + " ";
+        } else {
+          console.warn('Invalid start wall coordinates detected:', { interUp, interDw });
+          continue; // Skip this wall if coordinates are invalid
+        }
       }
 
       // WALL FINISHED
@@ -183,8 +213,15 @@ var editor = {
         var eqP = qSVG.perpendicularEquation(eqWallUp, wall.end.x, wall.end.y);
         var interUp = qSVG.intersectionOfEquations(eqWallUp, eqP, "object");
         var interDw = qSVG.intersectionOfEquations(eqWallDw, eqP, "object");
-        wall.coords.push(interDw, interUp);
-        dWay = dWay + "L" + interDw.x + "," + interDw.y + " L" + interUp.x + "," + interUp.y + " Z";
+        
+        // Validate coordinates before adding to path
+        if (interDw && !isNaN(interDw.x) && !isNaN(interDw.y) && interUp && !isNaN(interUp.x) && !isNaN(interUp.y)) {
+          wall.coords.push(interDw, interUp);
+          dWay = dWay + "L" + interDw.x + "," + interDw.y + " L" + interUp.x + "," + interUp.y + " Z";
+        } else {
+          console.warn('Invalid end wall coordinates detected:', { interDw, interUp });
+          continue; // Skip this wall if coordinates are invalid
+        }
       }
       else {
         var eqP = qSVG.perpendicularEquation(eqWallUp, wall.end.x, wall.end.y);
@@ -216,12 +253,23 @@ var editor = {
           var interDw = qSVG.intersectionOfEquations(eqWallDw, eqP, "object");
         }
 
-        wall.coords.push(interDw, interUp);
-        dWay = dWay + "L" + interDw.x + "," + interDw.y + " L" + interUp.x + "," + interUp.y + " Z";
+        // Validate coordinates before adding to path
+        if (interDw && !isNaN(interDw.x) && !isNaN(interDw.y) && interUp && !isNaN(interUp.x) && !isNaN(interUp.y)) {
+          wall.coords.push(interDw, interUp);
+          dWay = dWay + "L" + interDw.x + "," + interDw.y + " L" + interUp.x + "," + interUp.y + " Z";
+        } else {
+          console.warn('Invalid wall coordinates detected, skipping wall segment:', { interDw, interUp });
+          continue; // Skip this wall if coordinates are invalid
+        }
       }
 
-      wall.graph = editor.makeWall(dWay);
-      $('#boxwall').append(wall.graph);
+      // Only create wall if dWay contains valid coordinates
+      if (dWay && !dWay.includes('NaN')) {
+        wall.graph = editor.makeWall(dWay);
+        $('#boxwall').append(wall.graph);
+      } else {
+        console.warn('Invalid wall path detected, skipping wall creation:', dWay);
+      }
     }
   },
 
@@ -248,6 +296,8 @@ var editor = {
       wallToInvisble.backUp = wallToInvisble.thick;
       wallToInvisble.thick = 0.07;
       editor.architect(WALLS);
+      // Reapply floorplan opacity after wall rebuild
+      if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
       mode = "select_mode";
       $('#panel').show(200);
       save();
@@ -265,6 +315,8 @@ var editor = {
     wallToInvisble.thick = wallToInvisble.backUp;
     wallToInvisble.backUp = false;
     editor.architect(WALLS);
+    // Reapply floorplan opacity after wall rebuild
+    if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
     mode = "select_mode";
     $('#panel').show(200);
     save();
@@ -315,6 +367,8 @@ var editor = {
     wall = new editor.wall(initCoords, wallToSplit.end, "normal", initThick);
     WALLS.push(wall);
     editor.architect(WALLS);
+    // Reapply floorplan opacity after wall rebuild
+    if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
     mode = "select_mode";
     $('#panel').show(200);
     save();
@@ -761,15 +815,38 @@ var editor = {
       if (ROOM[rr].action == 'add') globalArea = globalArea + ROOM[rr].area;
 
       var pathSurface = ROOM[rr].coords;
+      // Validate coordinates before creating path
+      if (!pathSurface[0] || isNaN(pathSurface[0].x) || isNaN(pathSurface[0].y)) {
+        console.warn('Invalid pathSurface coordinates for room', rr);
+        continue;
+      }
+      
       var pathCreate = "M" + pathSurface[0].x + "," + pathSurface[0].y;
       for (var p = 1; p < pathSurface.length; p++) {
+        if (!pathSurface[p] || isNaN(pathSurface[p].x) || isNaN(pathSurface[p].y)) {
+          console.warn('Invalid pathSurface coordinate at index', p, 'for room', rr);
+          continue;
+        }
         pathCreate = pathCreate + " " + "L" + pathSurface[p].x + "," + pathSurface[p].y;
       }
       if (ROOM[rr].inside.length > 0) {
         for (var ins = 0; ins < ROOM[rr].inside.length; ins++) {
-          pathCreate = pathCreate + " M" + Rooms.polygons[ROOM[rr].inside[ins]].coords[Rooms.polygons[ROOM[rr].inside[ins]].coords.length - 1].x + "," + Rooms.polygons[ROOM[rr].inside[ins]].coords[Rooms.polygons[ROOM[rr].inside[ins]].coords.length - 1].y;
-          for (var free = Rooms.polygons[ROOM[rr].inside[ins]].coords.length - 2; free > -1; free--) {
-            pathCreate = pathCreate + " L" + Rooms.polygons[ROOM[rr].inside[ins]].coords[free].x + "," + Rooms.polygons[ROOM[rr].inside[ins]].coords[free].y;
+          const insideCoords = Rooms.polygons[ROOM[rr].inside[ins]].coords;
+          if (!insideCoords || insideCoords.length === 0) continue;
+          
+          const lastCoord = insideCoords[insideCoords.length - 1];
+          if (!lastCoord || isNaN(lastCoord.x) || isNaN(lastCoord.y)) {
+            console.warn('Invalid inside coordinate for room', rr, 'inside', ins);
+            continue;
+          }
+          
+          pathCreate = pathCreate + " M" + lastCoord.x + "," + lastCoord.y;
+          for (var free = insideCoords.length - 2; free > -1; free--) {
+            if (!insideCoords[free] || isNaN(insideCoords[free].x) || isNaN(insideCoords[free].y)) {
+              console.warn('Invalid inside coordinate at index', free, 'for room', rr, 'inside', ins);
+              continue;
+            }
+            pathCreate = pathCreate + " L" + insideCoords[free].x + "," + insideCoords[free].y;
           }
         }
       }

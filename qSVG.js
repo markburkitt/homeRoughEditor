@@ -216,6 +216,14 @@ var qSVG = {
     intersectionOfEquations:  function(equation1, equation2, type = "array", message = false) {
       var retArray;
       var retObj;
+      
+      // Validate input equations
+      if (!equation1 || !equation2 || equation1.A === undefined || equation1.B === undefined || 
+          equation2.A === undefined || equation2.B === undefined) {
+        console.warn('Invalid equations passed to intersectionOfEquations:', { equation1, equation2 });
+        return type === "array" ? [0, 0] : {x: 0, y: 0};
+      }
+      
       if (equation1.A == equation2.A) {
         retArray = false;
         retObj = false;
@@ -229,29 +237,55 @@ var qSVG = {
         retObj = {x: equation2.B, y: equation1.B};
       }
       if (equation1.A == 'h' && equation2.A != 'v' && equation2.A != 'h') {
-        retArray =  [(equation1.B - equation2.B)/equation2.A, equation1.B];
-        retObj = {x: (equation1.B - equation2.B)/equation2.A, y: equation1.B};
+        var calcX = (equation1.B - equation2.B)/equation2.A;
+        var calcY = equation1.B;
+        retArray =  [calcX, calcY];
+        retObj = {x: calcX, y: calcY};
       }
       if (equation1.A == 'v' && equation2.A != 'v' && equation2.A != 'h') {
-        retArray =  [equation1.B, (equation2.A * equation1.B) + equation2.B];
-        retObj = {x: equation1.B, y: (equation2.A * equation1.B) + equation2.B};
+        var calcX = equation1.B;
+        var calcY = (equation2.A * equation1.B) + equation2.B;
+        retArray =  [calcX, calcY];
+        retObj = {x: calcX, y: calcY};
       }
       if (equation2.A == 'h' && equation1.A != 'v' && equation1.A != 'h') {
-        retArray =  [(equation2.B - equation1.B)/equation1.A, equation2.B];
-        retObj = {x: (equation2.B - equation1.B)/equation1.A, y: equation2.B};
+        var calcX = (equation2.B - equation1.B)/equation1.A;
+        var calcY = equation2.B;
+        retArray =  [calcX, calcY];
+        retObj = {x: calcX, y: calcY};
       }
       if (equation2.A == 'v' && equation1.A != 'v' && equation1.A != 'h') {
-        retArray =  [equation2.B, (equation1.A * equation2.B) + equation1.B];
-        retObj = {x: equation2.B, y: (equation1.A * equation2.B) + equation1.B};
+        var calcX = equation2.B;
+        var calcY = (equation1.A * equation2.B) + equation1.B;
+        retArray =  [calcX, calcY];
+        retObj = {x: calcX, y: calcY};
       }
       if (equation1.A != 'h' && equation1.A != 'v' && equation2.A != 'v' && equation2.A != 'h') {
-        var xT = (equation2.B - equation1.B) / (equation1.A - equation2.A);
-        var yT = (equation1.A * xT) + equation1.B;
-        retArray =  [xT, yT];
-        retObj = {x: xT, y: yT};
+        // Check for parallel lines (same slope)
+        if (Math.abs(equation1.A - equation2.A) < 0.0001) {
+          // Parallel lines - return false (this is expected behavior)
+          retArray = false;
+          retObj = false;
+        } else {
+          var xT = (equation2.B - equation1.B) / (equation1.A - equation2.A);
+          var yT = (equation1.A * xT) + equation1.B;
+          retArray =  [xT, yT];
+          retObj = {x: xT, y: yT};
+        }
       }
-      if (type == "array") return retArray;
-      else return retObj;
+      
+      // Validate results before returning
+      if (type == "array") {
+        if (retArray && (isNaN(retArray[0]) || isNaN(retArray[1]))) {
+          return [0, 0];
+        }
+        return retArray;
+      } else {
+        if (retObj && (isNaN(retObj.x) || isNaN(retObj.y))) {
+          return {x: 0, y: 0};
+        }
+        return retObj;
+      }
     },
 
     vectorXY: function(obj1, obj2) {
