@@ -2551,6 +2551,35 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             }
         }
 
+        // Convert light items to Blender format
+        if (typeof LIGHT_ITEMS !== 'undefined' && Array.isArray(LIGHT_ITEMS)) {
+            for (let i = 0; i < LIGHT_ITEMS.length; i++) {
+                const light = LIGHT_ITEMS[i];
+                if (light.x !== undefined && light.y !== undefined) {
+                    // Convert position from pixels to meters and apply center offset
+                    const x = parseFloat(((light.x / 60) - centerX).toFixed(2));
+                    const y = parseFloat(((light.y / 60) - centerY).toFixed(2));
+                    
+                    let onCeiling = false;
+                    if (typeof LIGHT_DATA !== 'undefined' && Array.isArray(LIGHT_DATA)) {
+                        const lightType = LIGHT_DATA.find(f => f.id === light.lightId || f.type === light.type);
+                        if (lightType && lightType.on_ceiling !== undefined) {
+                            onCeiling = lightType.on_ceiling;
+                        }
+                    }
+
+                    const asset = light.lightId || light.type || 'unknown';
+
+                    blenderData.builtins.push({
+                        asset: asset,
+                        position: [x, y],
+                        rotation: 0,
+                        on_ceiling: onCeiling
+                    });
+                }
+            }
+        }
+
         // Convert furniture items to Blender format and wrap in styles
         const furnitureArray = [];
         if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {

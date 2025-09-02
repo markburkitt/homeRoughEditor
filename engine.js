@@ -623,6 +623,16 @@ function _MOUSEMOVE(event) {
     cursor('none');
   }
 
+  //**************************************************************************
+  //**************        LIGHT PLACEMENT MODE ******************************
+  //**************************************************************************
+  
+  if (mode == 'light_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    updateLightCursor(snap.x, snap.y);
+    cursor('none');
+  }
+
   // ------------------------------  LINE MODE ------------------------------------------------------
 
   if ((mode == 'line_mode' || mode == 'partition_mode') && action == 0) {
@@ -1282,7 +1292,7 @@ function _MOUSEMOVE(event) {
 
   // Permit panning when floorplan mode is active even if background image tools are open
   const floorplanMode = !!window.__floorplanMode;
-  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode' || mode == 'camera_placement_mode' || mode == 'camera_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage && !draggingCameraItem) {
+  if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode' || mode == 'camera_placement_mode' || mode == 'camera_mode' || mode == 'light_placement_mode' || mode == 'light_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage && !draggingCameraItem && !window.draggingLightItem) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
     distX = (snap.xMouse - pox) * factor;
@@ -1379,6 +1389,21 @@ function _MOUSEDOWN(event) {
     poy = snap.yMouse;
     // Remember initial position for click detection
     window._pendingCameraPlacement = { x: snap.x, y: snap.y, xMouse: snap.xMouse, yMouse: snap.yMouse };
+    event.stopPropagation();
+    return;
+  }
+
+  // *******************************************************************
+  // ********************   LIGHT PLACEMENT MODE   *******************
+  // *******************************************************************
+  if (mode == 'light_placement_mode') {
+    snap = calcul_snap(event, grid_snap);
+    // Begin potential panning; defer placement to mouseup if it's a click (not a drag)
+    drag = 'on';
+    pox = snap.xMouse;
+    poy = snap.yMouse;
+    // Remember initial position for click detection
+    window._pendingLightPlacement = { x: snap.x, y: snap.y, xMouse: snap.xMouse, yMouse: snap.yMouse };
     event.stopPropagation();
     return;
   }
@@ -1687,6 +1712,21 @@ function _MOUSEUP(event) {
       }
     } catch (_) { /* no-op */ }
     window._pendingCameraPlacement = null;
+  }
+
+  // Handle deferred placement from light_placement_mode
+  if (window._pendingLightPlacement) {
+    try {
+      const snapUp = calcul_snap(event, grid_snap);
+      const dx = Math.abs(snapUp.xMouse - window._pendingLightPlacement.xMouse);
+      const dy = Math.abs(snapUp.yMouse - window._pendingLightPlacement.yMouse);
+      const moved = Math.sqrt(dx*dx + dy*dy);
+      if (moved < 5 && mode === 'light_placement_mode') {
+        // Consider it a click: place light at original snapped coords
+        placeLightItem(window._pendingLightPlacement.x, window._pendingLightPlacement.y);
+      }
+    } catch (_) { /* no-op */ }
+    window._pendingLightPlacement = null;
   }
 
   if (mode == 'select_mode') {

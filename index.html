@@ -115,6 +115,7 @@
     <g id="boxEnergy"></g>
     <g id="boxFurniture"></g>
     <g id="boxCameras"></g>
+    <g id="boxLights"></g>
     <g id="boxbind"></g>
     <g id="boxArea"></g>
     <g id="boxRib"></g>
@@ -471,6 +472,34 @@
         class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
   </div>
 
+  <div id="lightPanel" class="leftBox">
+    <h2>Light Placement</h2>
+    <hr />
+    <p>Select light to place:</p>
+    <div id="light_options" style="max-height: 400px; overflow-y: auto;">
+      <!-- Light options will be populated here -->
+    </div>
+    <hr />
+    <button class="btn btn-info fully" onclick="exitLightMode();">
+      <i class="fa fa-backward" aria-hidden="true"></i> Back to Selection
+    </button>
+  </div>
+
+  <div id="lightTools" class="leftBox">
+    <h2>Light Details</h2>
+    <hr />
+    <div id="lightDetails">
+      <p><strong>Name:</strong> <span id="lightName"></span></p>
+      <p><strong>Type:</strong> <span id="lightType"></span></p>
+      <p><strong>ID:</strong> <span id="lightId"></span></p>
+    </div>
+    <br />
+    <button class="btn btn-danger fully" id="lightRemove"><i class="fa fa-2x fa-trash" aria-hidden="true"></i></button>
+    <button class="btn btn-info" style="margin-top:50px"
+      onclick="hideLightTools();"><i
+        class="fa fa-2x fa-backward" aria-hidden="true"></i></button>
+  </div>
+
   <div id="backgroundImageTools" class="leftBox">
     <h2>Background Image Settings</h2>
     <hr />
@@ -644,6 +673,7 @@
           onclick="$('.sub').hide();$('#energy_list').toggle(200);">ENERGY</button></li>
       <li><button class="btn btn-light shadow fully " id="furniture_mode" onclick="enterFurnitureMode();">FURNITURE</button></li>
       <li><button class="btn btn-light shadow fully " id="camera_mode" onclick="enterCameraMode();">CAMERAS</button></li>
+      <li><button class="btn btn-light shadow fully " id="light_mode" onclick="enterLightMode();">LIGHTS</button></li>
       <br />
 
       <li><button class="btn btn-light shadow fully " id="layer_mode"
@@ -700,6 +730,12 @@
           <div class="funkyradio-info">
             <input type="checkbox" id="showLayerCameras" checked />
             <label for="showLayerCameras">Cameras</label>
+          </div>
+        </div>
+        <div class="funkyradio" style="font-size:0.8em">
+          <div class="funkyradio-info">
+            <input type="checkbox" id="showLayerLights" checked />
+            <label for="showLayerLights">Lights</label>
           </div>
         </div>
       </div>
@@ -885,5 +921,6 @@
 <script src="export.js"></script>
 <script src="furniture.js"></script>
 <script src="camera.js"></script>
+<script src="lights.js"></script>
 
 </html>

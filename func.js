@@ -334,7 +334,7 @@ function save(boot = false) {
         return snapshot;
     })(__bgImgEl) : (__prevSnap && __prevSnap.backgroundImage ? __prevSnap.backgroundImage : null);
 
-    const snapshot = { objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData(), cameraData: getCameraData(), backgroundImage };
+    const snapshot = { objData: OBJDATA, wallData: WALLS, roomData: ROOM, furnitureData: getFurnitureData(), cameraData: getCameraData(), lightData: getLightData(), backgroundImage };
 
     // If caller requests suppression and we'd drop background image (DOM missing) while previous snapshot has one, skip pushing
     try {
@@ -470,6 +470,10 @@ function load(index = HISTORY.index, boot = false) {
     // Load camera data if it exists
     if (historyTemp.cameraData) {
         loadSavedCameraData(historyTemp.cameraData);
+    }
+    // Load light data if it exists
+    if (historyTemp.lightData) {
+        loadSavedLightData(historyTemp.lightData);
     }
     // Restore background image properties if present and an image exists in DOM
     try {
@@ -1339,33 +1343,29 @@ function limitObj(equation, size, coords, message = false) {
 }
 
 function zoom_maker(lens, xmove, xview) {
-
-    if (lens === 'zoomout' && zoom > 1 && zoom < 17) {
-        zoom--;
-        width_viewbox += xmove;
+    if (lens === 'zoomin' && zoom < 17) {
+        zoom++;
+        width_viewbox = width_viewbox - xmove;
         let ratioWidthZoom = taille_w / width_viewbox;
         height_viewbox = width_viewbox * ratio_viewbox;
         myDiv = document.getElementById("scaleVal");
-        myDiv.style.width = 60 * ratioWidthZoom + 'px';
+        if (myDiv) myDiv.style.width = 60 * ratioWidthZoom + 'px';
+        originX_viewbox = originX_viewbox + (xmove / 2);
+        originY_viewbox = originY_viewbox + (xmove / 2 * ratio_viewbox);
+    }
+    if (lens === 'zoomout' && zoom > 1) {
+        zoom--;
+        width_viewbox = width_viewbox + xmove;
+        let ratioWidthZoom = taille_w / width_viewbox;
+        height_viewbox = width_viewbox * ratio_viewbox;
+        myDiv = document.getElementById("scaleVal");
+        if (myDiv) myDiv.style.width = 60 * ratioWidthZoom + 'px';
         originX_viewbox = originX_viewbox - (xmove / 2);
         originY_viewbox = originY_viewbox - (xmove / 2 * ratio_viewbox);
     }
-    if (lens === 'zoomin' && zoom < 14 && zoom > 0) {
-        zoom++;
-        let oldWidth = width_viewbox;
-        let ratioWidthZoom = taille_w / width_viewbox;
-        let newWidth = width_viewbox - xmove;
-        if (newWidth < 100) newWidth = 100;
-        width_viewbox = newWidth;
-        height_viewbox = width_viewbox * ratio_viewbox;
-        originX_viewbox = originX_viewbox + ((oldWidth - width_viewbox) / 2);
-        originY_viewbox = originY_viewbox + (((oldWidth - width_viewbox) / 2) * ratio_viewbox);
-        myDiv = document.getElementById("scaleVal");
-        myDiv.style.width = 60 * ratioWidthZoom + 'px';
-    }
-    if (lens === 'zoominit') {
-        width_viewbox = taille_w;
-        height_viewbox = width_viewbox * ratio_viewbox;
+    if (lens === 'zoomreset') {
+        width_viewbox = 1100;
+        height_viewbox = 700;
         originX_viewbox = 0;
         originY_viewbox = 0;
         zoom = 9;
