@@ -52,7 +52,7 @@ async function loadFurnitureData() {
         const response = await fetch('furniture.json');
         const data = await response.json();
         FURNITURE_DATA = data.furniture;
-        console.log('Loaded furniture data from furniture.json:', FURNITURE_DATA.length, 'items');
+        // console.log('Loaded furniture data from furniture.json:', FURNITURE_DATA.length, 'items');
         populateFurnitureOptions();
     } catch (error) {
         console.error('Error loading furniture data:', error);
@@ -73,7 +73,7 @@ function populateFurnitureOptions() {
     
     optionsContainer.innerHTML = '';
     
-    console.log('Populating furniture options:', FURNITURE_DATA);
+    // console.log('Populating furniture options:', FURNITURE_DATA);
     
     FURNITURE_DATA.forEach(furniture => {
         const button = document.createElement('button');
@@ -499,13 +499,13 @@ function getFurnitureData() {
         y: item.y,
         rotation: item.rotation
     }));
-    console.log('Saving furniture data:', data);
+   //  console.log('Saving furniture data:', data);
     return data;
 }
 
 // Load saved furniture data (for undo/redo operations)
 async function loadSavedFurnitureData(furnitureData) {
-    console.log('Loading furniture data:', furnitureData);
+    //console.log('Loading furniture data:', furnitureData);
     
     // Ensure FURNITURE_DATA is loaded before restoring furniture
     if (FURNITURE_DATA.length === 0) {
@@ -521,7 +521,7 @@ async function loadSavedFurnitureData(furnitureData) {
     // Recreate furniture items
     if (Array.isArray(furnitureData)) {
         furnitureData.forEach(data => {
-            console.log('Restoring furniture item:', data);
+            //console.log('Restoring furniture item:', data);
             
             // Find matching furniture type from FURNITURE_DATA
             const furnitureType = FURNITURE_DATA.find(f => f.id === data.furnitureId || f.type === data.type);
@@ -561,7 +561,7 @@ async function loadSavedFurnitureData(furnitureData) {
                     }
                     item.rotation = data.rotation || 0;
                     
-                    console.log('Setting rotation to:', item.rotation);
+                    // console.log('Setting rotation to:', item.rotation);
                     
                     // Update visual representation: translate outer group, rotate inner group
                     if (item.graph) {

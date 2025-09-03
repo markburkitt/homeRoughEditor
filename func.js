@@ -3,8 +3,8 @@ WALLS = [];
 OBJDATA = [];
 ROOM = [];
 HISTORY = [];
-wallSize = 20;
-partitionSize = 8;
+window.wallSize = 10;
+window.partitionSize = 6;
 let drag = 'off';
 let action = 0;
 let magnetic = 0;
@@ -31,7 +31,7 @@ try {
 grid = 20;
 showRib = true;
 showArea = true;
-meter = 60;
+meter = 160;
 grid_snap = 'off';
 colorbackground = "#ffffff";
 colorline = "#fff";
@@ -2029,7 +2029,7 @@ function cursor(tool) {
         "url('https://wiki.openmrs.org/s/en_GB/7502/b9217199c27dd617c8d51f6186067d7767c5001b/_/images/icons/emoticons/add.png') 8 8, auto";
     if (tool === 'scissor') tool = "url('https://maxcdn.icons8.com/windows10/PNG/64/Hands/hand_scissors-64.png'), auto";
     if (tool === 'trash') tool = "url('https://cdn4.iconfinder.com/data/icons/common-toolbar/36/Cancel-32.png'), auto";
-    if (tool === 'validation') tool = "url('https://images.fatguymedia.com/wp-content/uploads/2015/09/check.png'), auto";
+    if (tool === 'validation') tool = "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\"><path fill=\"%23008000\" d=\"M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z\"/></svg>') 8 8, auto";
     linElement.css('cursor', tool);
 }
 
@@ -2868,7 +2868,7 @@ document.getElementById('import_image_mode').addEventListener('click', function(
                             const currentImgY = parseFloat(bgImg.getAttribute('y')) || 0;
                             
                             // Calculate what the background image width should be in pixels to match target
-                            const targetImgWidthPixels = targetWidth * (typeof meter !== 'undefined' ? meter : 60);
+                            const targetImgWidthPixels = targetWidth * meter;
                             const scaleFactor = targetImgWidthPixels / currentImgWidth;
                             
                             

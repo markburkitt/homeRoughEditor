@@ -152,8 +152,11 @@ var editor = {
 
       var angleWall = Math.atan2(wall.end.y - wall.start.y, wall.end.x - wall.start.x);
       wall.angle = angleWall;
-      var wallThickX = (wall.thick / 2) * Math.sin(angleWall);
-      var wallThickY = (wall.thick / 2) * Math.cos(angleWall);
+      
+      // Convert wall thickness from centimeters to pixels
+      var thickInPixels = (wall.thick * meter) / 100; // wall.thick is in cm, meter is pixels per meter
+      var wallThickX = (thickInPixels / 2) * Math.sin(angleWall);
+      var wallThickY = (thickInPixels / 2) * Math.cos(angleWall);
       var eqWallUp = qSVG.createEquation(wall.start.x + wallThickX, wall.start.y - wallThickY, wall.end.x + wallThickX, wall.end.y - wallThickY);
       var eqWallDw = qSVG.createEquation(wall.start.x - wallThickX, wall.start.y + wallThickY, wall.end.x - wallThickX, wall.end.y + wallThickY);
       var eqWallBase = qSVG.createEquation(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
@@ -174,8 +177,9 @@ var editor = {
         //   var previousWallStart = previousWall.start;
         //   var previousWallEnd = previousWall.end;
         var anglePreviousWall = Math.atan2(previousWallEnd.y - previousWallStart.y, previousWallEnd.x - previousWallStart.x);
-        var previousWallThickX = (previousWall.thick / 2) * Math.sin(anglePreviousWall);
-        var previousWallThickY = (previousWall.thick / 2) * Math.cos(anglePreviousWall);
+        var previousThickInPixels = (previousWall.thick * meter) / 100;
+        var previousWallThickX = (previousThickInPixels / 2) * Math.sin(anglePreviousWall);
+        var previousWallThickY = (previousThickInPixels / 2) * Math.cos(anglePreviousWall);
         var eqPreviousWallUp = qSVG.createEquation(previousWallStart.x + previousWallThickX, previousWallStart.y - previousWallThickY, previousWallEnd.x + previousWallThickX, previousWallEnd.y - previousWallThickY);
         var eqPreviousWallDw = qSVG.createEquation(previousWallStart.x - previousWallThickX, previousWallStart.y + previousWallThickY, previousWallEnd.x - previousWallThickX, previousWallEnd.y + previousWallThickY);
         if (Math.abs(anglePreviousWall - angleWall) > 0.09) {
@@ -229,8 +233,9 @@ var editor = {
         //   var nextWallStart = nextWall.start;
         //   var nextWallEnd = nextWall.end;
         var angleNextWall = Math.atan2(nextWallEnd.y - nextWallStart.y, nextWallEnd.x - nextWallStart.x);
-        var nextWallThickX = (nextWall.thick / 2) * Math.sin(angleNextWall);
-        var nextWallThickY = (nextWall.thick / 2) * Math.cos(angleNextWall);
+        var nextThickInPixels = (nextWall.thick * meter) / 100;
+        var nextWallThickX = (nextThickInPixels / 2) * Math.sin(angleNextWall);
+        var nextWallThickY = (nextThickInPixels / 2) * Math.cos(angleNextWall);
         var eqNextWallUp = qSVG.createEquation(nextWallStart.x + nextWallThickX, nextWallStart.y - nextWallThickY, nextWallEnd.x + nextWallThickX, nextWallEnd.y - nextWallThickY);
         var eqNextWallDw = qSVG.createEquation(nextWallStart.x - nextWallThickX, nextWallStart.y + nextWallThickY, nextWallEnd.x - nextWallThickX, nextWallEnd.y + nextWallThickY);
         if (Math.abs(angleNextWall - angleWall) > 0.09) {

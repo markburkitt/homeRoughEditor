@@ -2158,7 +2158,7 @@ function showBackgroundImageTools() {
             if (imageElement.dataset) imageElement.dataset.aspectRatio = String(aspect);
         }
 
-        const pxPerMeter = 60; // editor scale
+        const pxPerMeter = (typeof meter !== 'undefined') ? meter : 160; // editor scale
         const widthMInput = document.getElementById('backgroundImageWidthM');
         const heightMInput = document.getElementById('backgroundImageHeightM');
         const aspectInfo = document.getElementById('backgroundImageAspectInfo');
@@ -2800,10 +2800,7 @@ function classifyWalls(blenderData, epsilon = 0.2) {
  * @returns {Array<Array<[number,number]>>} - Array of chains
  */
 function buildExternalPolygon(segments, tolerance = 0.03) {
-    console.log(`[buildExternalPolygon] Starting with ${segments ? segments.length : 0} segments, tolerance=${tolerance}`);
-    
     if (!Array.isArray(segments) || segments.length === 0) {
-        console.log(`[buildExternalPolygon] Early exit: invalid or empty segments array`);
         return [];
     }
 
@@ -2818,24 +2815,19 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
                 out.push(points[i]);
             }
         }
-        console.log(`[buildExternalPolygon] dedupeConsecutive: ${points.length} -> ${out.length} points`);
         return out;
     }
 
     // Make a mutable copy of segments
     const pool = segments.map(s => [[s[0][0], s[0][1]], [s[1][0], s[1][1]]]);
-    console.log(`[buildExternalPolygon] Created pool with ${pool.length} segments`);
 
     let allChains = [];
 
     // Try building chains starting from each segment in the pool
     for (let startIdx = 0; startIdx < pool.length; startIdx++) {
         if (!pool[startIdx]) {
-            console.log(`[buildExternalPolygon] Skipping consumed segment ${startIdx}`);
             continue; // already consumed
         }
-        
-        console.log(`[buildExternalPolygon] Starting new chain from segment ${startIdx}`);
         // Start a new chain
         let [a, b] = pool[startIdx];
         let chain = [a, b];
@@ -2858,13 +2850,11 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
                 const distToB = dist(tail, sB);
 
                 if (distToA <= tolerance) {
-                    console.log(`[buildExternalPolygon] Chain ${startIdx}: connecting to segment ${i} via A (dist=${distToA.toFixed(4)})`);
                     chain.push(sB);
                     pool[i] = null;
                     found = true;
                     break;
                 } else if (distToB <= tolerance) {
-                    console.log(`[buildExternalPolygon] Chain ${startIdx}: connecting to segment ${i} via B (dist=${distToB.toFixed(4)})`);
                     chain.push(sA);
                     pool[i] = null;
                     found = true;
@@ -2873,27 +2863,18 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
             }
 
             if (!found) {
-                console.log(`[buildExternalPolygon] Chain ${startIdx}: Stuck after ${guard} iterations, chain length=${chain.length}`);
                 break; // stuck
             }
         }
         
-        if (guard >= maxIterations) {
-            console.log(`[buildExternalPolygon] Chain ${startIdx}: Hit max iterations (${maxIterations}), chain length=${chain.length}`);
-        }
 
         // Clean up the chain and add it to results
         const cleanChain = dedupeConsecutive(chain);
         if (cleanChain.length >= 2) {
-            console.log(`[buildExternalPolygon] Adding chain ${startIdx} with ${cleanChain.length} points`);
             allChains.push(cleanChain);
-        } else {
-            console.log(`[buildExternalPolygon] Discarding chain ${startIdx} - too short (${cleanChain.length} points)`);
         }
     }
 
-    console.log(`[buildExternalPolygon] Summary: Found ${allChains.length} chains before connection pass`);
-    console.log(`[buildExternalPolygon] Chain lengths: [${allChains.map(c => c.length).join(', ')}]`);
     
     // Extra pass: try to connect loose chains by matching start/end points
     let connected = true;
@@ -2941,8 +2922,6 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
                 }
                 
                 if (mergedChain) {
-                    console.log(`[buildExternalPolygon] Connection attempt ${connectionAttempts}: Merging chain ${i} (${chainA.length} pts) with chain ${j} (${chainB.length} pts) via ${connectionType}`);
-                    
                     // Replace chainA with merged chain, remove chainB
                     allChains[i] = dedupeConsecutive(mergedChain);
                     allChains[j] = null;
@@ -2955,10 +2934,8 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
         }
     }
     
-    // Filter out null entries and log final results
+    // Filter out null entries
     allChains = allChains.filter(chain => chain !== null);
-    console.log(`[buildExternalPolygon] Final summary: ${allChains.length} chains after ${connectionAttempts} connection attempts`);
-    console.log(`[buildExternalPolygon] Final chain lengths: [${allChains.map(c => c.length).join(', ')}]`);
     
     return allChains;
 }

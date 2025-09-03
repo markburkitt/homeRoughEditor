@@ -227,7 +227,7 @@ function placeCameraItem(x, y, skipSave = false) {
         $('#boxinfo').html('Camera placed - click Add Camera to place more cameras');
     }
     
-    console.log('Placed camera:', cameraItem);
+    // console.log('Placed camera:', cameraItem);
     return cameraItem;
 }
 
@@ -405,7 +405,7 @@ function getCameraData() {
 
 // Load saved camera data (for undo/redo operations)
 async function loadSavedCameraData(cameraData) {
-    console.log('Loading camera data:', cameraData);
+    //console.log('Loading camera data:', cameraData);
     
     // Clear existing cameras
     CAMERA_ITEMS.forEach(camera => {
@@ -437,7 +437,7 @@ async function loadSavedCameraData(cameraData) {
         });
     }
     
-    console.log('Loaded camera data:', cameraData ? cameraData.length : 0, 'cameras');
+    //console.log('Loaded camera data:', cameraData ? cameraData.length : 0, 'cameras');
 }
 
 // Clear all cameras

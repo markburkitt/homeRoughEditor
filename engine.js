@@ -1895,12 +1895,24 @@ function _MOUSEUP(event) {
     $('#linetemp').remove(); // DEL LINE HELP CONSTRUC 0 45 90
     intersectionOff();
 
-    var sizeWall = qSVG.measure({ x: x, y: y }, { x: pox, y: poy });
-    sizeWall = sizeWall / meter;
-    if ($('#line_construc').length && sizeWall > 0.3) {
-      var sizeWall = wallSize;
-      if (mode == 'partition_mode') sizeWall = partitionSize;
-      var wall = new editor.wall({ x: pox, y: poy }, { x: x, y: y }, "normal", sizeWall);
+    var wallLength = qSVG.measure({ x: x, y: y }, { x: pox, y: poy });
+    wallLength = wallLength / meter;
+    if ($('#line_construc').length && wallLength > 0.3) {
+      var wallThickness = window.wallSize || 10;
+      if (mode == 'partition_mode') wallThickness = window.partitionSize || 6;
+      console.log('Wall thickness variables:', { 
+        wallSize: wallSize, 
+        partitionSize: partitionSize, 
+        mode: mode, 
+        finalThickness: wallThickness 
+      });
+      console.log('Creating wall with coordinates:', { 
+        start: { x: pox, y: poy }, 
+        end: { x: x, y: y }, 
+        thickness: wallThickness 
+      });
+      var wall = new editor.wall({ x: pox, y: poy }, { x: x, y: y }, "normal", wallThickness);
+      console.log('Created wall object:', wall);
       WALLS.push(wall);
       editor.architect(WALLS);
       // Reapply floorplan opacity after wall rebuild

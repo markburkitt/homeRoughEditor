@@ -562,13 +562,13 @@ function getLightData() {
         x: item.x,
         y: item.y
     }));
-    console.log('Saving light data:', data);
+    // console.log('Saving light data:', data);
     return data;
 }
 
 // Load saved light data (for undo/redo operations)
 function loadSavedLightData(lightData) {
-    console.log('Loading light data:', lightData);
+    //console.log('Loading light data:', lightData);
     
     // Clear existing lights
     LIGHT_ITEMS.forEach(item => {
@@ -579,7 +579,7 @@ function loadSavedLightData(lightData) {
     // Recreate light items
     if (Array.isArray(lightData)) {
         lightData.forEach(data => {
-            console.log('Restoring light item:', data);
+           // console.log('Restoring light item:', data);
             
             // Find matching light type from LIGHT_DATA
             const lightType = LIGHT_DATA.find(l => l.id === data.lightId || l.type === data.type);
