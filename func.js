@@ -1285,15 +1285,15 @@ for (let k = 0; k < objTrashBtn.length; k++) {
     });
 }
 
-let dropdownMenu = document.querySelectorAll(".dropdown-menu li a");
-for (let k = 0; k < dropdownMenu.length; k++) {
-    dropdownMenu[k].addEventListener("click", function () {
-        let selText = this.textContent;
-        $(this).parents('.btn-group').find('.dropdown-toggle').html(selText + ' <span class="caret"></span>');
-        if (selText != 'None') $('#roomName').val(selText);
-        else $('#roomName').val('');
+// Keep hidden #roomName in sync with the visible #roomLabel <select>
+(function(){
+    const select = document.getElementById('roomLabel');
+    if (!select) return;
+    select.addEventListener('change', function(){
+        const txt = this.options && this.selectedIndex >= 0 ? this.options[this.selectedIndex].text.trim() : '';
+        $('#roomName').val(txt === 'None' ? '' : txt);
     });
-}
+})();
 
 // TRY MATRIX CALC FOR BBOX REAL COORDS WITH TRAS + ROT.
 function matrixCalc(el, message = false) {

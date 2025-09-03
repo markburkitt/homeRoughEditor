@@ -2486,6 +2486,15 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         // Convert wall outlines into requested object structure
         blenderData.walls = [];
         
+
+        // Create wall object with all outlines
+        const exwallObject = {
+            material: "Walls",
+            trim: "SquareTrim", 
+            trim_material: "Walls",
+            points: []
+        };
+
         // Create wall object with all outlines
         const wallObject = {
             material: "Walls",
@@ -2494,8 +2503,12 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             points: []
         };
         
-        if (externalOutline && externalOutline.length >= 2) {
-            wallObject.points.push(externalOutline);
+        if (externalOutline && externalOutline.length >= 1) {
+            exwallObject.points = externalOutline;
+        }
+        else {
+            console.log("No external outline found");
+            console.log(external);
         }
 
         if (internalOutlines && internalOutlines.length > 0) {
@@ -2504,6 +2517,10 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             }
         }
         
+        if (exwallObject.points.length > 0) {
+            blenderData.walls.push(exwallObject);
+        }
+
         // Only add wall object if it has points
         if (wallObject.points.length > 0) {
             blenderData.walls.push(wallObject);
@@ -2775,90 +2792,23 @@ function classifyWalls(blenderData, epsilon = 0.2) {
 }
 
 /**
- * Build a closed polygon by stitching wall segments whose endpoints meet within a tolerance.
- * Returns the largest closed loop found (by area) as an array of [x, y] points.
- * If no closed loop can be formed, returns null.
+ * Build chains by stitching wall segments whose endpoints meet within a tolerance.
+ * Returns all chains found as an array of chains (each chain is an array of [x, y] points).
  *
  * @param {Array} segments - Array of segments: [ [ [x1,y1], [x2,y2] ], ... ]
  * @param {number} [tolerance=0.03] - Max distance between endpoints to be considered matching
- * @returns {Array|null}
+ * @returns {Array<Array<[number,number]>>} - Array of chains
  */
 function buildExternalPolygon(segments, tolerance = 0.03) {
-    if (!Array.isArray(segments) || segments.length === 0) return null;
+    console.log(`[buildExternalPolygon] Starting with ${segments ? segments.length : 0} segments, tolerance=${tolerance}`);
+    
+    if (!Array.isArray(segments) || segments.length === 0) {
+        console.log(`[buildExternalPolygon] Early exit: invalid or empty segments array`);
+        return [];
+    }
 
     // Utility: distance between points
     const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-
-    // Shoelace area (signed)
-    function polygonArea(poly) {
-        let area = 0;
-        for (let i = 0, n = poly.length; i < n; i++) {
-            const j = (i + 1) % n;
-            area += poly[i][0] * poly[j][1] - poly[j][0] * poly[i][1];
-        }
-        return area / 2;
-    }
-
-    // Make a mutable copy of segments
-    const pool = segments.map(s => [[s[0][0], s[0][1]], [s[1][0], s[1][1]]]);
-
-    let bestLoop = null;
-    let bestArea = 0;
-
-    // Try building loops starting from each segment in the pool
-    for (let startIdx = 0; startIdx < pool.length; startIdx++) {
-        if (!pool[startIdx]) continue; // already consumed
-        // Start a new chain
-        let [a, b] = pool[startIdx];
-        let chain = [a, b];
-        pool[startIdx] = null; // consume
-
-        // Extend chain forward until closed or stuck
-        let guard = 0;
-        while (guard++ < segments.length + 5) {
-            const tail = chain[chain.length - 1];
-            let found = false;
-            for (let i = 0; i < pool.length; i++) {
-                const seg = pool[i];
-                if (!seg) continue;
-                const sA = seg[0];
-                const sB = seg[1];
-
-                if (dist(tail, sA) <= tolerance) {
-                    chain.push(sB);
-                    pool[i] = null;
-                    found = true;
-                    break;
-                } else if (dist(tail, sB) <= tolerance) {
-                    chain.push(sA);
-                    pool[i] = null;
-                    found = true;
-                    break;
-                }
-            }
-
-            // Closed loop?
-            if (dist(chain[chain.length - 1], chain[0]) <= tolerance && chain.length > 3) {
-                // Remove duplicated last point if extremely close to first
-                chain[chain.length - 1] = chain[0];
-                // Compute area and keep the largest absolute-area loop
-                const unique = dedupeConsecutive(chain);
-                const clean = ensureClosed(unique);
-                const cleanNoDup = clean.slice(0, clean.length - 1); // area expects no repeated final point
-                const area = Math.abs(polygonArea(cleanNoDup));
-                if (area > bestArea) {
-                    bestArea = area;
-                    bestLoop = cleanNoDup;
-                }
-                break;
-            }
-
-            if (!found) break; // stuck
-        }
-    }
-
-    // Ensure closed loop by appending the first vertex at the end
-    return bestLoop && bestLoop.length >= 3 ? [...bestLoop, bestLoop[0]] : null;
 
     // Remove consecutive duplicates (within tolerance)
     function dedupeConsecutive(points) {
@@ -2868,19 +2818,149 @@ function buildExternalPolygon(segments, tolerance = 0.03) {
                 out.push(points[i]);
             }
         }
+        console.log(`[buildExternalPolygon] dedupeConsecutive: ${points.length} -> ${out.length} points`);
         return out;
     }
 
-    // Ensure first == last (closed)
-    function ensureClosed(points) {
-        if (points.length === 0) return points;
-        const first = points[0];
-        const last = points[points.length - 1];
-        if (dist(first, last) > tolerance) {
-            return [...points, first];
+    // Make a mutable copy of segments
+    const pool = segments.map(s => [[s[0][0], s[0][1]], [s[1][0], s[1][1]]]);
+    console.log(`[buildExternalPolygon] Created pool with ${pool.length} segments`);
+
+    let allChains = [];
+
+    // Try building chains starting from each segment in the pool
+    for (let startIdx = 0; startIdx < pool.length; startIdx++) {
+        if (!pool[startIdx]) {
+            console.log(`[buildExternalPolygon] Skipping consumed segment ${startIdx}`);
+            continue; // already consumed
         }
-        return points;
+        
+        console.log(`[buildExternalPolygon] Starting new chain from segment ${startIdx}`);
+        // Start a new chain
+        let [a, b] = pool[startIdx];
+        let chain = [a, b];
+        pool[startIdx] = null; // consume
+
+        // Extend chain forward until stuck
+        let guard = 0;
+        const maxIterations = segments.length + 5;
+        while (guard++ < maxIterations) {
+            const tail = chain[chain.length - 1];
+            let found = false;
+            
+            for (let i = 0; i < pool.length; i++) {
+                const seg = pool[i];
+                if (!seg) continue;
+                const sA = seg[0];
+                const sB = seg[1];
+
+                const distToA = dist(tail, sA);
+                const distToB = dist(tail, sB);
+
+                if (distToA <= tolerance) {
+                    console.log(`[buildExternalPolygon] Chain ${startIdx}: connecting to segment ${i} via A (dist=${distToA.toFixed(4)})`);
+                    chain.push(sB);
+                    pool[i] = null;
+                    found = true;
+                    break;
+                } else if (distToB <= tolerance) {
+                    console.log(`[buildExternalPolygon] Chain ${startIdx}: connecting to segment ${i} via B (dist=${distToB.toFixed(4)})`);
+                    chain.push(sA);
+                    pool[i] = null;
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                console.log(`[buildExternalPolygon] Chain ${startIdx}: Stuck after ${guard} iterations, chain length=${chain.length}`);
+                break; // stuck
+            }
+        }
+        
+        if (guard >= maxIterations) {
+            console.log(`[buildExternalPolygon] Chain ${startIdx}: Hit max iterations (${maxIterations}), chain length=${chain.length}`);
+        }
+
+        // Clean up the chain and add it to results
+        const cleanChain = dedupeConsecutive(chain);
+        if (cleanChain.length >= 2) {
+            console.log(`[buildExternalPolygon] Adding chain ${startIdx} with ${cleanChain.length} points`);
+            allChains.push(cleanChain);
+        } else {
+            console.log(`[buildExternalPolygon] Discarding chain ${startIdx} - too short (${cleanChain.length} points)`);
+        }
     }
+
+    console.log(`[buildExternalPolygon] Summary: Found ${allChains.length} chains before connection pass`);
+    console.log(`[buildExternalPolygon] Chain lengths: [${allChains.map(c => c.length).join(', ')}]`);
+    
+    // Extra pass: try to connect loose chains by matching start/end points
+    let connected = true;
+    let connectionAttempts = 0;
+    const maxConnectionAttempts = 10;
+    
+    while (connected && connectionAttempts < maxConnectionAttempts) {
+        connected = false;
+        connectionAttempts++;
+        
+        for (let i = 0; i < allChains.length; i++) {
+            if (!allChains[i]) continue;
+            
+            const chainA = allChains[i];
+            const startA = chainA[0];
+            const endA = chainA[chainA.length - 1];
+            
+            for (let j = i + 1; j < allChains.length; j++) {
+                if (!allChains[j]) continue;
+                
+                const chainB = allChains[j];
+                const startB = chainB[0];
+                const endB = chainB[chainB.length - 1];
+                
+                let mergedChain = null;
+                let connectionType = '';
+                
+                // Check all possible connections
+                if (dist(endA, startB) <= tolerance) {
+                    // A-end connects to B-start: A + B
+                    mergedChain = [...chainA, ...chainB.slice(1)];
+                    connectionType = 'A-end to B-start';
+                } else if (dist(endA, endB) <= tolerance) {
+                    // A-end connects to B-end: A + reverse(B)
+                    mergedChain = [...chainA, ...chainB.slice(0, -1).reverse()];
+                    connectionType = 'A-end to B-end';
+                } else if (dist(startA, startB) <= tolerance) {
+                    // A-start connects to B-start: reverse(A) + B
+                    mergedChain = [...chainA.slice(0, -1).reverse(), ...chainB];
+                    connectionType = 'A-start to B-start';
+                } else if (dist(startA, endB) <= tolerance) {
+                    // A-start connects to B-end: B + A
+                    mergedChain = [...chainB, ...chainA.slice(1)];
+                    connectionType = 'A-start to B-end';
+                }
+                
+                if (mergedChain) {
+                    console.log(`[buildExternalPolygon] Connection attempt ${connectionAttempts}: Merging chain ${i} (${chainA.length} pts) with chain ${j} (${chainB.length} pts) via ${connectionType}`);
+                    
+                    // Replace chainA with merged chain, remove chainB
+                    allChains[i] = dedupeConsecutive(mergedChain);
+                    allChains[j] = null;
+                    connected = true;
+                    break;
+                }
+            }
+            
+            if (connected) break;
+        }
+    }
+    
+    // Filter out null entries and log final results
+    allChains = allChains.filter(chain => chain !== null);
+    console.log(`[buildExternalPolygon] Final summary: ${allChains.length} chains after ${connectionAttempts} connection attempts`);
+    console.log(`[buildExternalPolygon] Final chain lengths: [${allChains.map(c => c.length).join(', ')}]`);
+    
+    return allChains;
 }
 
 /**

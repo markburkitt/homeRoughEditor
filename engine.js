@@ -1824,13 +1824,20 @@ function _MOUSEUP(event) {
     document.querySelector('#roomBackground').value = ROOM[binder.id].color;
     var roomName = ROOM[binder.id].name;
     document.querySelector('#roomName').value = roomName;
-    if (ROOM[binder.id].name != '') {
-      document.querySelector('#roomLabel').innerHTML = roomName + ' <span class="caret"></span>';
-    }
-    else {
-      document.querySelector('#roomLabel').innerHTML = 'None <span class="caret"></span>';
-    }
-
+    (function () {
+      const select = document.querySelector('#roomLabel');
+      if (!select) return;
+      const targetName = roomName && roomName.trim() !== '' ? roomName.trim() : 'None';
+      let matchedValue = null;
+      for (const opt of select.options) {
+        if (opt.text.trim().toLowerCase() === targetName.toLowerCase()) {
+          matchedValue = opt.value;
+          break;
+        }
+      }
+      // Default to '0' which corresponds to 'None' in index.html
+      select.value = matchedValue !== null ? matchedValue : '0';
+    })();
     var actionToDo = ROOM[binder.id].action;
     document.querySelector('#' + actionToDo + 'Action').checked = true;
     $('#panel').hide(100);
