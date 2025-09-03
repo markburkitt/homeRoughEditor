@@ -556,6 +556,11 @@ function load(index = HISTORY.index, boot = false) {
         }
         mode = 'select_mode';
     } catch(_) {}
+    
+    // Center the restored layout in view
+    if (typeof centerFloorplanView === 'function') {
+        try { centerFloorplanView(100); } catch (e) { /* noop */ }
+    }
 }
 
 // Initialize SVG with fixed viewBox dimensions
@@ -1343,7 +1348,7 @@ function limitObj(equation, size, coords, message = false) {
 }
 
 function zoom_maker(lens, xmove, xview) {
-    if (lens === 'zoomin' && zoom < 17) {
+    if (lens === 'zoomin' && zoom < 12) {
         zoom++;
         width_viewbox = width_viewbox - xmove;
         let ratioWidthZoom = taille_w / width_viewbox;
@@ -1364,12 +1369,16 @@ function zoom_maker(lens, xmove, xview) {
         originY_viewbox = originY_viewbox - (xmove / 2 * ratio_viewbox);
     }
     if (lens === 'zoomreset') {
-        width_viewbox = 1100;
-        height_viewbox = 700;
-        originX_viewbox = 0;
-        originY_viewbox = 0;
+        // Center and fit floorplan to screen with 50px border
+        if (!centerFloorplanView(100)) {
+            // Fallback to default values if no walls exist
+            width_viewbox = 1100;
+            height_viewbox = 700;
+            originX_viewbox = 0;
+            originY_viewbox = 0;
+            factor = 1;
+        }
         zoom = 9;
-        factor = 1;
     }
     if (lens === 'zoomright') {
         originX_viewbox += xview;
@@ -1399,21 +1408,69 @@ function centerFloorplanView(padding = 40) {
     try {
         if (!Array.isArray(WALLS) || WALLS.length === 0) return false;
 
+        // Update viewport dimensions in case window was resized
+        taille_w = $('#lin').width();
+        taille_h = $('#lin').height();
+        ratio_viewbox = taille_h / taille_w;
+
         // Compute bounding box from wall endpoints
         let minX, minY, maxX, maxY;
+        let hasElements = false;
+        
+        // Include walls
         for (let i = 0; i < WALLS.length; i++) {
             const s = WALLS[i].start;
             const e = WALLS[i].end;
-            if (!i) {
+            if (!hasElements) {
                 minX = Math.min(s.x, e.x);
                 minY = Math.min(s.y, e.y);
                 maxX = Math.max(s.x, e.x);
                 maxY = Math.max(s.y, e.y);
+                hasElements = true;
             } else {
                 minX = Math.min(minX, s.x, e.x);
                 minY = Math.min(minY, s.y, e.y);
                 maxX = Math.max(maxX, s.x, e.x);
                 maxY = Math.max(maxY, s.y, e.y);
+            }
+        }
+        
+        // Include furniture items
+        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
+            for (let i = 0; i < FURNITURE_ITEMS.length; i++) {
+                const furniture = FURNITURE_ITEMS[i];
+                if (furniture.x !== undefined && furniture.y !== undefined) {
+                    if (!hasElements) {
+                        minX = maxX = furniture.x;
+                        minY = maxY = furniture.y;
+                        hasElements = true;
+                    } else {
+                        minX = Math.min(minX, furniture.x);
+                        minY = Math.min(minY, furniture.y);
+                        maxX = Math.max(maxX, furniture.x);
+                        maxY = Math.max(maxY, furniture.y);
+                    }
+                }
+            }
+        }
+        
+        // Include dimension labels (text elements in #boxRib)
+        const dimensionTexts = document.querySelectorAll('#boxRib text');
+        for (let i = 0; i < dimensionTexts.length; i++) {
+            const textEl = dimensionTexts[i];
+            const x = parseFloat(textEl.getAttribute('x'));
+            const y = parseFloat(textEl.getAttribute('y'));
+            if (!isNaN(x) && !isNaN(y)) {
+                if (!hasElements) {
+                    minX = maxX = x;
+                    minY = maxY = y;
+                    hasElements = true;
+                } else {
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x);
+                    maxY = Math.max(maxY, y);
+                }
             }
         }
 
@@ -1422,13 +1479,14 @@ function centerFloorplanView(padding = 40) {
         const bboxW = Math.max(1, maxX - minX);
         const bboxH = Math.max(1, maxY - minY);
 
-        // Target size keeping aspect ratio
+        // Target size keeping aspect ratio with minimum padding on both dimensions
         const viewAspect = ratio_viewbox; // height/width
         const targetWidth = bboxW + 2 * padding;
         const targetHeight = bboxH + 2 * padding;
         const widthFromHeight = targetHeight / viewAspect;
+        const heightFromWidth = targetWidth * viewAspect;
         const fitWidth = Math.max(targetWidth, widthFromHeight);
-        const fitHeight = fitWidth * viewAspect;
+        const fitHeight = Math.max(targetHeight, heightFromWidth);
 
         width_viewbox = fitWidth;
         height_viewbox = fitHeight;

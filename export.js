@@ -804,7 +804,7 @@ function importAIFloorplanJSONWithScaling(file, targetWidthM) {
                 
                 // Center the imported plan in view
                 if (typeof centerFloorplanView === 'function') {
-                    try { centerFloorplanView(40); } catch (e) { /* noop */ }
+                    try { centerFloorplanView(100); } catch (e) { /* noop */ }
                 }
                 
                 resolve(true);
@@ -993,7 +993,7 @@ function importAIFloorplanJSON(file) {
                 }
                 // Center the imported plan in view
                 if (typeof centerFloorplanView === 'function') {
-                    try { centerFloorplanView(40); } catch (e) { /* noop */ }
+                    try { centerFloorplanView(100); } catch (e) { /* noop */ }
                 }
                 resolve(true);
             } catch (err) {
@@ -1450,6 +1450,10 @@ function importFloorplanJSON(file) {
                     }
                     if (typeof fonc_button === 'function') {
                         try { fonc_button('select_mode'); } catch (e) { /* noop */ }
+                    }
+                    // Center the imported plan in view
+                    if (typeof centerFloorplanView === 'function') {
+                        try { centerFloorplanView(100); } catch (e) { /* noop */ }
                     }
                     resolve(true);
                 } else {
