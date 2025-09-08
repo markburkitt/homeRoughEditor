@@ -2670,9 +2670,9 @@ document.getElementById('export_mode').addEventListener('click', function() {
     
     // Call the export function
     if (exportFloorplanJSON(filename, true)) {
-        $('#boxinfo').html('Floorplan exported successfully!');
+        $('#boxinfo').html('Floorplan saved successfully!');
     } else {
-        $('#boxinfo').html('Export failed. Please try again.');
+        $('#boxinfo').html('Save failed. Please try again.');
     }
 });
 
@@ -2697,8 +2697,8 @@ document.getElementById('export_blender_mode').addEventListener('click', functio
 document.getElementById('import_mode').addEventListener('click', function() {
     // Show confirmation dialog before importing (will clear current work)
     if (WALLS.length > 0 || OBJDATA.length > 0 || ROOM.length > 0) {
-        if (!confirm('Importing will replace your current floorplan. Are you sure you want to continue?')) {
-            $('#boxinfo').html('Import cancelled');
+        if (!confirm('Opening a floorplan will replace your current work. Are you sure you want to continue?')) {
+            $('#boxinfo').html('Open cancelled');
             return;
         }
     }

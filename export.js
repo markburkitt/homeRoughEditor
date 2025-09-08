@@ -38,6 +38,57 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
         // Prepare room data for export
         const roomDataForExport = [...ROOM];
 
+        // Prepare furniture data for export
+        const furnitureDataForExport = [];
+        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
+            for (let i = 0; i < FURNITURE_ITEMS.length; i++) {
+                const furniture = FURNITURE_ITEMS[i];
+                furnitureDataForExport.push({
+                    id: furniture.id,
+                    type: furniture.type,
+                    name: furniture.name,
+                    category: furniture.category,
+                    x: furniture.x,
+                    y: furniture.y,
+                    rotation: furniture.rotation || 0,
+                    size: furniture.size || 1
+                });
+            }
+        }
+
+        // Prepare lights data for export
+        const lightsDataForExport = [];
+        if (typeof LIGHT_ITEMS !== 'undefined' && Array.isArray(LIGHT_ITEMS)) {
+            for (let i = 0; i < LIGHT_ITEMS.length; i++) {
+                const light = LIGHT_ITEMS[i];
+                lightsDataForExport.push({
+                    id: light.id,
+                    type: light.type,
+                    name: light.name,
+                    lightId: light.lightId,
+                    x: light.x,
+                    y: light.y
+                });
+            }
+        }
+
+        // Prepare cameras data for export
+        const camerasDataForExport = [];
+        if (typeof CAMERA_ITEMS !== 'undefined' && Array.isArray(CAMERA_ITEMS)) {
+            for (let i = 0; i < CAMERA_ITEMS.length; i++) {
+                const camera = CAMERA_ITEMS[i];
+                camerasDataForExport.push({
+                    id: camera.id,
+                    type: camera.type,
+                    name: camera.name,
+                    x: camera.x,
+                    y: camera.y,
+                    rotation: camera.rotation || 0,
+                    height: camera.height || 1.2
+                });
+            }
+        }
+
         // Create the export data structure
         const exportData = {
             version: "0.95",
@@ -45,7 +96,10 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
             data: {
                 walls: wallDataForExport,
                 objects: objDataForExport,
-                rooms: roomDataForExport
+                rooms: roomDataForExport,
+                furniture: furnitureDataForExport,
+                lights: lightsDataForExport,
+                cameras: camerasDataForExport
             }
         };
 
@@ -55,6 +109,9 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
                 totalWalls: wallDataForExport.length,
                 totalObjects: objDataForExport.length,
                 totalRooms: roomDataForExport.length,
+                totalFurniture: furnitureDataForExport.length,
+                totalLights: lightsDataForExport.length,
+                totalCameras: camerasDataForExport.length,
                 totalArea: typeof globalArea !== 'undefined' ? (globalArea / 3600).toFixed(2) + ' m²' : 'Not calculated',
                 settings: {
                     wallSize: wallSize,
@@ -98,9 +155,11 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
             }
         }
 
-        console.log('Floorplan exported successfully as:', a.download);
+        console.log('Floorplan saved successfully as:', a.download);
         if (typeof $('#boxinfo') !== 'undefined') {
-            $('#boxinfo').html('Floorplan exported successfully');
+            $('#boxinfo').html('Floorplan saved successfully with ' + 
+                (furnitureDataForExport.length + lightsDataForExport.length + camerasDataForExport.length) + 
+                ' furniture/lights/cameras items');
         }
         
         return true;
@@ -1444,9 +1503,18 @@ function importFloorplanJSON(file) {
 
                 // Load the data into the editor
                 if (loadFloorplanData(jsonData)) {
-                    console.log('Floorplan imported successfully');
+                    console.log('Floorplan opened successfully');
+                    const furnitureCount = (jsonData.data.furniture && jsonData.data.furniture.length) || 0;
+                    const lightsCount = (jsonData.data.lights && jsonData.data.lights.length) || 0;
+                    const camerasCount = (jsonData.data.cameras && jsonData.data.cameras.length) || 0;
+                    const totalItems = furnitureCount + lightsCount + camerasCount;
+                    
                     if (typeof $('#boxinfo') !== 'undefined') {
-                        $('#boxinfo').html('Floorplan imported successfully!');
+                        if (totalItems > 0) {
+                            $('#boxinfo').html('Floorplan opened successfully with ' + totalItems + ' furniture/lights/cameras items!');
+                        } else {
+                            $('#boxinfo').html('Floorplan opened successfully!');
+                        }
                     }
                     if (typeof fonc_button === 'function') {
                         try { fonc_button('select_mode'); } catch (e) { /* noop */ }
@@ -1505,6 +1573,17 @@ function validateImportData(jsonData) {
 
     // Check for required arrays
     if (!Array.isArray(data.walls) || !Array.isArray(data.objects) || !Array.isArray(data.rooms)) {
+        return false;
+    }
+
+    // Optional arrays for furniture, lights, and cameras (backward compatibility)
+    if (data.furniture && !Array.isArray(data.furniture)) {
+        return false;
+    }
+    if (data.lights && !Array.isArray(data.lights)) {
+        return false;
+    }
+    if (data.cameras && !Array.isArray(data.cameras)) {
         return false;
     }
 
@@ -1593,6 +1672,27 @@ function loadFloorplanData(jsonData) {
             }
         }
 
+        // Load furniture data if present
+        if (data.furniture && Array.isArray(data.furniture)) {
+            if (typeof loadSavedFurnitureData === 'function') {
+                loadSavedFurnitureData(data.furniture);
+            }
+        }
+
+        // Load lights data if present
+        if (data.lights && Array.isArray(data.lights)) {
+            if (typeof loadSavedLightData === 'function') {
+                loadSavedLightData(data.lights);
+            }
+        }
+
+        // Load cameras data if present
+        if (data.cameras && Array.isArray(data.cameras)) {
+            if (typeof loadSavedCameraData === 'function') {
+                loadSavedCameraData(data.cameras);
+            }
+        }
+
         // Rebuild the visual representation
         if (typeof editor !== 'undefined' && editor.architect) {
             editor.architect(WALLS);
@@ -1642,6 +1742,36 @@ function clearCurrentFloorplan() {
         // Clear rooms
         ROOM = [];
 
+        // Clear furniture items
+        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
+            FURNITURE_ITEMS.forEach(item => {
+                if (item.graph && item.graph.remove) {
+                    item.graph.remove();
+                }
+            });
+            FURNITURE_ITEMS.length = 0;
+        }
+
+        // Clear light items
+        if (typeof LIGHT_ITEMS !== 'undefined' && Array.isArray(LIGHT_ITEMS)) {
+            LIGHT_ITEMS.forEach(item => {
+                if (item.graph && item.graph.remove) {
+                    item.graph.remove();
+                }
+            });
+            LIGHT_ITEMS.length = 0;
+        }
+
+        // Clear camera items
+        if (typeof CAMERA_ITEMS !== 'undefined' && Array.isArray(CAMERA_ITEMS)) {
+            CAMERA_ITEMS.forEach(item => {
+                if (item.graph && item.graph.remove) {
+                    item.graph.remove();
+                }
+            });
+            CAMERA_ITEMS.length = 0;
+        }
+
         // Clear SVG containers
         if (typeof $ !== 'undefined') {
             $('#boxwall').empty();
@@ -1651,6 +1781,9 @@ function clearCurrentFloorplan() {
             $('#boxArea').empty();
             $('#boxRib').empty();
             $('#boxText').empty();
+            $('#boxFurniture').empty();
+            $('#boxLights').empty();
+            $('#boxCameras').empty();
         }
         
     } catch (error) {

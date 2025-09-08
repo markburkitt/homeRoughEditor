@@ -235,6 +235,12 @@ function placeFurnitureItem(x, y, skipSave = false) {
     furnitureRotGroup.attr({
         transform: `rotate(${furnitureItem.rotation})`
     });
+    // Add furniture to the DOM - append to boxFurniture group
+    const furnitureBox = document.getElementById('boxFurniture');
+    if (furnitureBox) {
+        furnitureBox.appendChild(furnitureGroup.get(0));
+    }
+    
     FURNITURE_ITEMS.push(furnitureItem);
     
     // Add click handler for selection (only in furniture modes)

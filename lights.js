@@ -248,6 +248,12 @@ function placeLightItem(x, y, skipSave = false) {
         transform: `translate(${x}, ${y})`
     });
     
+    // Add light to the DOM - append to boxLights group
+    const lightBox = document.getElementById('boxLights');
+    if (lightBox) {
+        lightBox.appendChild(lightGroup.get(0));
+    }
+    
     LIGHT_ITEMS.push(lightItem);
     
     // Add click handler for selection (only in light modes)
