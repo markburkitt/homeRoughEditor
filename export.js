@@ -89,6 +89,24 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
             }
         }
 
+        // Prepare background image data for export
+        let backgroundImageData = null;
+        const backgroundImageElement = document.getElementById('backgroundImage');
+        if (backgroundImageElement) {
+            const href = backgroundImageElement.getAttribute('href') || backgroundImageElement.getAttribute('xlink:href');
+            if (href && href.startsWith('data:')) {
+                backgroundImageData = {
+                    dataUrl: href,
+                    x: parseFloat(backgroundImageElement.getAttribute('x')) || 0,
+                    y: parseFloat(backgroundImageElement.getAttribute('y')) || 0,
+                    width: parseFloat(backgroundImageElement.getAttribute('width')) || 0,
+                    height: parseFloat(backgroundImageElement.getAttribute('height')) || 0,
+                    opacity: parseFloat(backgroundImageElement.getAttribute('opacity')) || 1,
+                    fileName: (typeof window !== 'undefined' && window.currentBackgroundImage && window.currentBackgroundImage.fileName) || 'background.jpg'
+                };
+            }
+        }
+
         // Create the export data structure
         const exportData = {
             version: "0.95",
@@ -99,7 +117,8 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
                 rooms: roomDataForExport,
                 furniture: furnitureDataForExport,
                 lights: lightsDataForExport,
-                cameras: camerasDataForExport
+                cameras: camerasDataForExport,
+                backgroundImage: backgroundImageData
             }
         };
 
@@ -157,9 +176,9 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
 
         console.log('Floorplan saved successfully as:', a.download);
         if (typeof $('#boxinfo') !== 'undefined') {
-            $('#boxinfo').html('Floorplan saved successfully with ' + 
-                (furnitureDataForExport.length + lightsDataForExport.length + camerasDataForExport.length) + 
-                ' furniture/lights/cameras items');
+            const totalItems = furnitureDataForExport.length + lightsDataForExport.length + camerasDataForExport.length;
+            const backgroundImageText = backgroundImageData ? ' and background image' : '';
+            $('#boxinfo').html('Floorplan saved successfully with ' + totalItems + ' furniture/lights/cameras items' + backgroundImageText);
         }
         
         return true;
@@ -1508,13 +1527,18 @@ function importFloorplanJSON(file) {
                     const lightsCount = (jsonData.data.lights && jsonData.data.lights.length) || 0;
                     const camerasCount = (jsonData.data.cameras && jsonData.data.cameras.length) || 0;
                     const totalItems = furnitureCount + lightsCount + camerasCount;
+                    const hasBackgroundImage = jsonData.data.backgroundImage && jsonData.data.backgroundImage.dataUrl;
                     
                     if (typeof $('#boxinfo') !== 'undefined') {
+                        let message = 'Floorplan opened successfully';
                         if (totalItems > 0) {
-                            $('#boxinfo').html('Floorplan opened successfully with ' + totalItems + ' furniture/lights/cameras items!');
-                        } else {
-                            $('#boxinfo').html('Floorplan opened successfully!');
+                            message += ' with ' + totalItems + ' furniture/lights/cameras items';
                         }
+                        if (hasBackgroundImage) {
+                            message += ' and background image';
+                        }
+                        message += '!';
+                        $('#boxinfo').html(message);
                     }
                     if (typeof fonc_button === 'function') {
                         try { fonc_button('select_mode'); } catch (e) { /* noop */ }
@@ -1690,6 +1714,25 @@ function loadFloorplanData(jsonData) {
         if (data.cameras && Array.isArray(data.cameras)) {
             if (typeof loadSavedCameraData === 'function') {
                 loadSavedCameraData(data.cameras);
+            }
+        }
+
+        // Load background image if present
+        if (data.backgroundImage && data.backgroundImage.dataUrl) {
+            if (typeof addBackgroundImage === 'function') {
+                addBackgroundImage(data.backgroundImage.dataUrl, data.backgroundImage.fileName || 'background.jpg');
+                
+                // Apply saved positioning and properties
+                setTimeout(() => {
+                    const backgroundImageElement = document.getElementById('backgroundImage');
+                    if (backgroundImageElement) {
+                        backgroundImageElement.setAttribute('x', data.backgroundImage.x || 0);
+                        backgroundImageElement.setAttribute('y', data.backgroundImage.y || 0);
+                        backgroundImageElement.setAttribute('width', data.backgroundImage.width || 0);
+                        backgroundImageElement.setAttribute('height', data.backgroundImage.height || 0);
+                        backgroundImageElement.setAttribute('opacity', data.backgroundImage.opacity || 1);
+                    }
+                }, 100); // Small delay to ensure image is loaded
             }
         }
 
