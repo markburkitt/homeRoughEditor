@@ -151,6 +151,7 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 
         // Convert walls to line segments
         // Each wall becomes [[start.x, start.y], [end.x, end.y]]
+        const rawWalls = [];
         for (let i = 0; i < WALLS.length; i++) {
             const wall = WALLS[i];
             if (wall.start && wall.end) {
@@ -159,12 +160,19 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
                 const endX = parseFloat(((wall.end.x / 60) - centerX).toFixed(2));
                 const endY = parseFloat(((wall.end.y / 60) - centerY).toFixed(2));
                 
-                blenderData.walls.push([
+                rawWalls.push([
                     [startX, startY],
                     [endX, endY]
                 ]);
             }
         }
+        
+        // Pre-processing: merge overlapping wall segments going in the same direction
+        console.log(`Pre-processing: ${rawWalls.length} raw walls`);
+        const mergedWalls = mergeOverlappingWalls(rawWalls);
+        console.log(`After merging overlapping segments: ${mergedWalls.length} walls`);
+        
+        blenderData.walls = mergedWalls;
 
         // Classify walls (now returns wall segments with metadata)
         const { internal, external } = classifyWalls(blenderData);
@@ -455,6 +463,143 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         console.error('Error exporting for Blender:', error);
         return false;
     }
+}
+
+/**
+ * Check if two line segments overlap and go in the same direction
+ * @param {Array} seg1 - [[x1, y1], [x2, y2]]
+ * @param {Array} seg2 - [[x3, y3], [x4, y4]]
+ * @param {number} tolerance - Distance tolerance for considering segments collinear
+ * @returns {boolean} True if segments overlap and are collinear
+ */
+function segmentsOverlapSameDirection(seg1, seg2, tolerance = 0.05) {
+    const [[x1, y1], [x2, y2]] = seg1;
+    const [[x3, y3], [x4, y4]] = seg2;
+    
+    // Calculate direction vectors
+    const dir1 = [x2 - x1, y2 - y1];
+    const dir2 = [x4 - x3, y4 - y3];
+    
+    // Normalize direction vectors
+    const len1 = Math.hypot(dir1[0], dir1[1]);
+    const len2 = Math.hypot(dir2[0], dir2[1]);
+    
+    if (len1 < 1e-10 || len2 < 1e-10) return false;
+    
+    const norm1 = [dir1[0] / len1, dir1[1] / len1];
+    const norm2 = [dir2[0] / len2, dir2[1] / len2];
+    
+    // Check if directions are parallel (same or opposite)
+    const dot = norm1[0] * norm2[0] + norm1[1] * norm2[1];
+    const isParallel = Math.abs(Math.abs(dot) - 1) < 0.01;
+    
+    if (!isParallel) return false;
+    
+    // Check if segments are collinear by testing if endpoints lie on the same line
+    // Distance from point to line formula
+    function pointToLineDistance(px, py, x1, y1, x2, y2) {
+        const A = y2 - y1;
+        const B = x1 - x2;
+        const C = x2 * y1 - x1 * y2;
+        return Math.abs(A * px + B * py + C) / Math.hypot(A, B);
+    }
+    
+    const dist1 = pointToLineDistance(x3, y3, x1, y1, x2, y2);
+    const dist2 = pointToLineDistance(x4, y4, x1, y1, x2, y2);
+    
+    if (dist1 > tolerance || dist2 > tolerance) return false;
+    
+    // Check if segments actually overlap (not just collinear)
+    // Project all points onto the line direction
+    const projectPoint = (px, py) => {
+        const dx = px - x1;
+        const dy = py - y1;
+        return dx * norm1[0] + dy * norm1[1];
+    };
+    
+    const proj1_start = 0;
+    const proj1_end = projectPoint(x2, y2);
+    const proj2_start = projectPoint(x3, y3);
+    const proj2_end = projectPoint(x4, y4);
+    
+    // Sort projections
+    const [min1, max1] = proj1_start <= proj1_end ? [proj1_start, proj1_end] : [proj1_end, proj1_start];
+    const [min2, max2] = proj2_start <= proj2_end ? [proj2_start, proj2_end] : [proj2_end, proj2_start];
+    
+    // Check for overlap
+    return max1 >= min2 && max2 >= min1;
+}
+
+/**
+ * Merge two overlapping collinear segments into one segment covering their extents
+ * @param {Array} seg1 - [[x1, y1], [x2, y2]]
+ * @param {Array} seg2 - [[x3, y3], [x4, y4]]
+ * @returns {Array} Merged segment [[x_min, y_min], [x_max, y_max]]
+ */
+function mergeOverlappingSegments(seg1, seg2) {
+    const [[x1, y1], [x2, y2]] = seg1;
+    const [[x3, y3], [x4, y4]] = seg2;
+    
+    // Get all endpoints
+    const points = [[x1, y1], [x2, y2], [x3, y3], [x4, y4]];
+    
+    // Calculate direction vector from first segment
+    const dir = [x2 - x1, y2 - y1];
+    const len = Math.hypot(dir[0], dir[1]);
+    const norm = [dir[0] / len, dir[1] / len];
+    
+    // Project all points onto the line direction
+    const projections = points.map(([px, py]) => {
+        const dx = px - x1;
+        const dy = py - y1;
+        const proj = dx * norm[0] + dy * norm[1];
+        return { point: [px, py], projection: proj };
+    });
+    
+    // Find the points with minimum and maximum projections
+    projections.sort((a, b) => a.projection - b.projection);
+    
+    return [projections[0].point, projections[projections.length - 1].point];
+}
+
+/**
+ * Pre-process walls to merge overlapping segments going in the same direction
+ * @param {Array} walls - Array of wall segments [[x1,y1], [x2,y2]]
+ * @returns {Array} Array of merged wall segments
+ */
+function mergeOverlappingWalls(walls) {
+    if (!Array.isArray(walls) || walls.length === 0) return walls;
+    
+    const mergedWalls = [];
+    const used = new Array(walls.length).fill(false);
+    
+    for (let i = 0; i < walls.length; i++) {
+        if (used[i]) continue;
+        
+        let currentWall = walls[i];
+        used[i] = true;
+        let merged = true;
+        
+        // Keep trying to merge until no more merges are possible
+        while (merged) {
+            merged = false;
+            
+            for (let j = 0; j < walls.length; j++) {
+                if (used[j]) continue;
+                
+                if (segmentsOverlapSameDirection(currentWall, walls[j])) {
+                    currentWall = mergeOverlappingSegments(currentWall, walls[j]);
+                    used[j] = true;
+                    merged = true;
+                    break; // Start over to check for new merge opportunities
+                }
+            }
+        }
+        
+        mergedWalls.push(currentWall);
+    }
+    
+    return mergedWalls;
 }
 
 /**
