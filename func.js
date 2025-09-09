@@ -61,6 +61,8 @@ function initHistory(boot = false) {
     // if (!boot && localStorage.getItem('history')) localStorage.removeItem('history');
     if (localStorage.getItem('history') && boot === "recovery") {
         let historyTemp = JSON.parse(localStorage.getItem('history'));
+        HISTORY = historyTemp;
+        HISTORY.index = historyTemp.length; // Set index to end of loaded history
         load(historyTemp.length - 1, "boot");
         save("boot");
     }
@@ -377,7 +379,7 @@ function save(boot = false) {
     if (HISTORY.length > MAX_HISTORY_SIZE) {
         const removeCount = HISTORY.length - MAX_HISTORY_SIZE;
         HISTORY.splice(0, removeCount);
-        HISTORY.index = Math.max(0, HISTORY.index - removeCount);
+        HISTORY.index = Math.max(0, (HISTORY.index || 0) - removeCount);
     }
     
     try {
@@ -387,7 +389,7 @@ function save(boot = false) {
             console.warn('localStorage quota exceeded, clearing old history');
             // Keep only the last 10 snapshots
             HISTORY = HISTORY.slice(-10);
-            HISTORY.index = Math.min(HISTORY.index, HISTORY.length - 1);
+            HISTORY.index = Math.min((HISTORY.index || 0), HISTORY.length - 1);
             try {
                 localStorage.setItem('history', JSON.stringify(HISTORY));
             } catch (e2) {
@@ -402,6 +404,10 @@ function save(boot = false) {
         }
     }
     
+    // Ensure HISTORY.index is always a valid number before incrementing
+    if (typeof HISTORY.index !== 'number' || isNaN(HISTORY.index)) {
+        HISTORY.index = HISTORY.length - 1;
+    }
     HISTORY.index++;
     // Log when state is saved to history along with current floorplan image metrics
     try {

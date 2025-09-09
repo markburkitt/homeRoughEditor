@@ -75,7 +75,7 @@ function populateFurnitureOptions() {
     
     // console.log('Populating furniture options:', FURNITURE_DATA);
     
-    FURNITURE_DATA.forEach(furniture => {
+    FURNITURE_DATA.filter(furniture => furniture.category !== 'light').forEach(furniture => {
         const button = document.createElement('button');
         button.className = 'btn btn-light fully furniture-option';
         button.style.marginBottom = '5px';

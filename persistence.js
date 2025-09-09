@@ -641,19 +641,35 @@ function loadFloorplanData(jsonData) {
  */
 function clearCurrentFloorplan() {
     try {
+        // Ensure global variables exist
+        if (typeof WALLS === 'undefined') window.WALLS = [];
+        if (typeof ROOM === 'undefined') window.ROOM = [];
+        if (typeof OBJDATA === 'undefined') window.OBJDATA = [];
         // Clear objects and their SVG elements
-        for (let k in OBJDATA) {
-            if (OBJDATA[k].graph && OBJDATA[k].graph.remove) {
-                OBJDATA[k].graph.remove();
+        if (typeof OBJDATA !== 'undefined') {
+            for (let k in OBJDATA) {
+                if (OBJDATA[k].graph && OBJDATA[k].graph.remove) {
+                    OBJDATA[k].graph.remove();
+                }
             }
+            OBJDATA.length = 0;
+        } else {
+            OBJDATA = [];
         }
-        OBJDATA = [];
 
         // Clear walls
-        WALLS = [];
+        if (typeof WALLS !== 'undefined') {
+            WALLS.length = 0;
+        } else {
+            window.WALLS = [];
+        }
 
         // Clear rooms
-        ROOM = [];
+        if (typeof ROOM !== 'undefined') {
+            ROOM.length = 0;
+        } else {
+            window.ROOM = [];
+        }
 
         // Clear furniture items
         if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
@@ -687,17 +703,27 @@ function clearCurrentFloorplan() {
 
         // Clear SVG containers
         if (typeof $ !== 'undefined') {
+            $('#boxpath').empty();
+            $('#boxSurface').empty();
+            $('#boxRoom').empty();
             $('#boxwall').empty();
             $('#boxcarpentry').empty();
             $('#boxEnergy').empty();
-            $('#boxRoom').empty();
+            $('#boxFurniture').empty();
+            $('#boxCameras').empty();
+            $('#boxLights').empty();
+            $('#boxbind').empty();
             $('#boxArea').empty();
             $('#boxRib').empty();
+            $('#boxScale').empty();
             $('#boxText').empty();
-            $('#boxFurniture').empty();
-            $('#boxLights').empty();
-            $('#boxCameras').empty();
+            $('#boxDebug').empty();
+            
+            // Clear area display
+            $('#areaValue').empty();
+            $('#boxinfo').empty();
         }
+        
         
     } catch (error) {
         console.error('Error clearing floorplan:', error);
@@ -853,11 +879,12 @@ function addBackgroundImage(imageDataUrl, fileName) {
         const imageElement = document.createElementNS('http://www.w3.org/2000/svg', 'image');
         imageElement.setAttribute('id', 'backgroundImage');
         
-        // Add double-click event handler
+        // Add double-click event handler (disabled)
         imageElement.addEventListener('dblclick', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            showBackgroundImageTools();
+            // Double-click functionality disabled
+            return;
         });
         
         // Add drag functionality
@@ -869,8 +896,11 @@ function addBackgroundImage(imageDataUrl, fileName) {
         
         imageElement.addEventListener('mousedown', function(e) {
             // Only enable dragging when background image tools are visible
-            if (!document.getElementById('backgroundImageTools').style.display || 
-                document.getElementById('backgroundImageTools').style.display === 'none') {
+            const toolsPanel = document.getElementById('backgroundImageTools');
+            if (!toolsPanel || toolsPanel.style.display === 'none' || 
+                window.getComputedStyle(toolsPanel).display === 'none') {
+                e.preventDefault();
+                e.stopPropagation();
                 return;
             }
             
@@ -917,11 +947,12 @@ function addBackgroundImage(imageDataUrl, fileName) {
                 window.getComputedStyle(toolsPanel).display !== 'none') {
                 imageElement.style.cursor = 'grab';
             } else {
-                imageElement.style.cursor = 'pointer';
+                imageElement.style.cursor = 'default';
             }
         }
         
-        // Store the cursor update function for later use
+        // Store the cursor update function globally for scaling mode access
+        window.updateBackgroundImageCursor = updateImageCursor;
         imageElement.updateCursor = updateImageCursor;
         
         // Set initial cursor

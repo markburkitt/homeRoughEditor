@@ -79,6 +79,19 @@ function _MOUSEMOVE(event) {
   // Cleanup debug markers so they don't linger when moving away from key points
   $('#boxDebug').empty();
 
+  // In scaling mode, block all hover effects and interactions
+  if (window.__scalingMode) {
+    try {
+      if (typeof (binder) !== 'undefined') {
+        if (binder.remove) binder.remove();
+        else if (binder.graph && binder.graph.remove) binder.graph.remove();
+        delete binder;
+      }
+      $('#boxbind').empty();
+    } catch (_) { /* no-op */ }
+    return;
+  }
+
   // In floorplan mode, do not show hover highlights over walls/nodes (binder visuals)
   if (window.__floorplanMode && mode === 'select_mode') {
     try {
@@ -1314,6 +1327,21 @@ function _MOUSEMOVE(event) {
 function _MOUSEDOWN(event) {
 
   event.preventDefault();
+  
+  // In scaling mode, block all element selection and interaction
+  if (window.__scalingMode) {
+    // Ensure no binder remains
+    try {
+      if (typeof (binder) !== 'undefined') {
+        if (binder.remove) binder.remove();
+        else if (binder.graph && binder.graph.remove) binder.graph.remove();
+        delete binder;
+      }
+      $('#boxbind').empty();
+    } catch (_) { /* no-op */ }
+    return;
+  }
+  
   // In floorplan mode, block edits in select mode entirely
   if (window.__floorplanMode && mode === 'select_mode') {
     // Ensure no binder remains

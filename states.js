@@ -197,9 +197,9 @@ function enterScalingMode() {
             const scaleFactorSpan = document.getElementById('scaleFactor');
             
             if (widthInput && heightInput && originalDimSpan && scaleFactorSpan) {
-                // Round to match displayed measurements precision
-                const displayWidth = Math.round(widthInMeters);
-                const displayHeight = Math.round(heightInMeters);
+                // Keep decimal precision for accurate scaling
+                const displayWidth = parseFloat(widthInMeters.toFixed(2));
+                const displayHeight = parseFloat(heightInMeters.toFixed(2));
                 
                 widthInput.value = displayWidth;
                 heightInput.value = displayHeight;
@@ -221,6 +221,11 @@ function enterScalingMode() {
         // Update button text
         if (window.__scalingBtn) {
             window.__scalingBtn.innerText = 'Exit scaling mode';
+        }
+        
+        // Update background image cursor
+        if (typeof window.updateBackgroundImageCursor === 'function') {
+            window.updateBackgroundImageCursor();
         }
         
         console.log('Entered scaling mode. Current dimensions:', currentWidth, 'x', currentHeight);
@@ -245,6 +250,11 @@ function exitScalingMode() {
         // Update button text
         if (window.__scalingBtn) {
             window.__scalingBtn.innerText = 'Scaling mode';
+        }
+        
+        // Update background image cursor
+        if (typeof window.updateBackgroundImageCursor === 'function') {
+            window.updateBackgroundImageCursor();
         }
         
         // Clear stored dimensions and original data
@@ -376,15 +386,15 @@ function updateFloorplanHeight() {
  */
 function scaleAllElementsUniformly(scaleFactor) {
     try {
-        // Calculate bounds and origin point for rigid scaling
+        // Calculate bounds and use center as origin point to preserve relative positioning
         const bounds = calculateFloorplanBounds();
-        const originX = bounds.minX;
-        const originY = bounds.minY;
+        const originX = bounds.minX + bounds.width / 2;
+        const originY = bounds.minY + bounds.height / 2;
         
         console.log('Rigid scaling by factor:', scaleFactor, 'Origin:', originX, originY);
         
         WALLS.forEach(wall => {
-            // Scale from fixed origin point (top-left) to maintain wall angles
+            // Scale from center origin point to preserve relative positioning
             wall.start.x = originX + (wall.start.x - originX) * scaleFactor;
             wall.start.y = originY + (wall.start.y - originY) * scaleFactor;
             
@@ -451,7 +461,17 @@ function scaleAllElementsUniformly(scaleFactor) {
                     item.y = originY + (item.y - originY) * scaleFactor;
                     // Update visual element transform
                     if (item.graph) {
-                        item.graph.setAttribute('transform', `translate(${item.x}, ${item.y}) rotate(${item.rotation || 0}) scale(${item.size || 1})`);
+                        // Handle jQuery object - use .attr() method instead of setAttribute
+                        if (item.graph.attr) {
+                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
+                            // Handle rotation separately on the rotation group
+                            if (item.rotGroup && item.rotGroup.attr) {
+                                item.rotGroup.attr('transform', `rotate(${item.rotation || 0}) scale(${item.size || 1})`);
+                            }
+                        } else if (item.graph.setAttribute) {
+                            // Fallback for native DOM elements
+                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y}) rotate(${item.rotation || 0}) scale(${item.size || 1})`);
+                        }
                     }
                 }
             });
@@ -464,7 +484,13 @@ function scaleAllElementsUniformly(scaleFactor) {
                     item.y = originY + (item.y - originY) * scaleFactor;
                     // Update visual element transform
                     if (item.graph) {
-                        item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
+                        // Handle jQuery object - use .attr() method instead of setAttribute
+                        if (item.graph.attr) {
+                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
+                        } else if (item.graph.setAttribute) {
+                            // Fallback for native DOM elements
+                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
+                        }
                     }
                 }
             });
@@ -477,11 +503,21 @@ function scaleAllElementsUniformly(scaleFactor) {
                     item.y = originY + (item.y - originY) * scaleFactor;
                     // Update visual element transform - cameras have rotation
                     if (item.graph) {
-                        item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
-                        // Update rotation group if it exists
-                        const rotGroup = item.graph.querySelector('.camera-rotation');
-                        if (rotGroup) {
-                            rotGroup.setAttribute('transform', `rotate(${item.rotation || 0})`);
+                        // Handle jQuery object - use .attr() method instead of setAttribute
+                        if (item.graph.attr) {
+                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
+                            // Update rotation group if it exists
+                            if (item.rotGroup && item.rotGroup.attr) {
+                                item.rotGroup.attr('transform', `rotate(${item.rotation || 0})`);
+                            }
+                        } else if (item.graph.setAttribute) {
+                            // Fallback for native DOM elements
+                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
+                            // Update rotation group if it exists
+                            const rotGroup = item.graph.querySelector('.camera-rotation');
+                            if (rotGroup) {
+                                rotGroup.setAttribute('transform', `rotate(${item.rotation || 0})`);
+                            }
                         }
                     }
                 }
