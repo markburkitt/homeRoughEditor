@@ -166,16 +166,21 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             }
         }
 
-        // Classify walls
+        // Classify walls (now returns wall segments with metadata)
         const { internal, external } = classifyWalls(blenderData);
+        
+        // Extract just the segments for polygon building
+        const externalSegments = external.map(item => item.segment);
+        const internalSegments = internal.map(item => item.segment);
+        
         // Attempt to stitch external walls into a single outline polygon
-        const externalOutline = buildExternalPolygon(external, 0.03);
+        const externalOutline = buildExternalPolygon(externalSegments, 0.03);
         // if (externalOutline && externalOutline.length >= 3) {
         //     blenderData.external_outline = externalOutline;
         // }
 
         // Build internal outlines by joining segments (chains may be open)
-        const internalOutlines = buildJoinedChains(internal, 0.03);
+        const internalOutlines = buildJoinedChains(internalSegments, 0.03);
         // if (internalOutlines && internalOutlines.length > 0) {
         //     blenderData.internal_outlines = internalOutlines;
         // }
@@ -183,6 +188,21 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         // Convert wall outlines into requested object structure
         blenderData.walls = [];
         
+        // Add wall segment metadata for traceability
+        blenderData.wall_segments = {
+            external: external.map(seg => ({
+                segmentId: seg.segmentId,
+                originalWallId: seg.originalWallId,
+                points: seg.segment,
+                classification: 'external'
+            })),
+            internal: internal.map(seg => ({
+                segmentId: seg.segmentId,
+                originalWallId: seg.originalWallId,
+                points: seg.segment,
+                classification: 'internal'
+            }))
+        };
 
         // Create wall object with all outlines
         const exwallObject = {
@@ -223,47 +243,82 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
             blenderData.walls.push(wallObject);
         }
 
-        // Convert objects (doors and windows) to individual objects with asset, position, and rotation
+        // Map doors and windows to wall segments and convert to Blender format
+        const allWallSegments = [...internal, ...external];
+        
         for (let i = 0; i < OBJDATA.length; i++) {
             const obj = OBJDATA[i];
             if (obj.x !== undefined && obj.y !== undefined) {
                 let x = parseFloat((obj.x / 60).toFixed(2));
                 let y = parseFloat((obj.y / 60).toFixed(2));
-                
-                // Adjust position based on angle property
-                // if (obj.angle !== undefined) {
-                //     const angle = obj.angle;
-                //     if (angle === 90) {
-                //         x += 0.1;
-                //     } else if (angle === 270) {
-                //         x -= 0.1;
-                //     } else if (angle === 180) {
-                //         y += 0.1;
-                //     } else if (angle === 0) {
-                //         y -= 0.1;
-                //     }
-                    
-                //     // Round to 2 decimal places after adjustment
-                //     x = parseFloat(x.toFixed(2));
-                //     y = parseFloat(y.toFixed(2));
-                // }
 
                 // Apply center offset to position coordinates
                 x = parseFloat((x - centerX).toFixed(2));
                 y = parseFloat((y - centerY).toFixed(2));
 
+                // Find which wall segment this door/window belongs to
+                let wallSegmentId = null;
+                let relativePosition = null;
+                
+                // Find the closest wall segment
+                let minDistance = Infinity;
+                for (let j = 0; j < allWallSegments.length; j++) {
+                    const segmentData = allWallSegments[j];
+                    const segment = segmentData.segment;
+                    
+                    // Calculate distance from door/window to wall segment
+                    const [[x1, y1], [x2, y2]] = segment;
+                    const A = x - x1;
+                    const B = y - y1;
+                    const C = x2 - x1;
+                    const D = y2 - y1;
+                    
+                    const dot = A * C + B * D;
+                    const lenSq = C * C + D * D;
+                    let param = -1;
+                    if (lenSq !== 0) param = dot / lenSq;
+                    
+                    let xx, yy;
+                    if (param < 0) {
+                        xx = x1;
+                        yy = y1;
+                    } else if (param > 1) {
+                        xx = x2;
+                        yy = y2;
+                    } else {
+                        xx = x1 + param * C;
+                        yy = y1 + param * D;
+                    }
+                    
+                    const distance = Math.hypot(x - xx, y - yy);
+                    if (distance < minDistance && param >= 0 && param <= 1) {
+                        minDistance = distance;
+                        wallSegmentId = segmentData.segmentId;
+                        relativePosition = param; // Position along the segment (0-1)
+                    }
+                }
+
                 // Categorize objects based on their type
+                const builtinData = {
+                    position: [x, y],
+                    rotation: obj.angle || 0
+                };
+                
+                // Add wall segment mapping if found
+                if (wallSegmentId && minDistance < 0.5) { // Within 0.5 meter tolerance
+                    builtinData.wallSegmentId = wallSegmentId;
+                    builtinData.relativePosition = parseFloat(relativePosition.toFixed(3));
+                }
+                
                 if (obj.type === 'door' || obj.type === 'doorDouble' || obj.type === 'doorSliding' || obj.type === 'simple') {
                     blenderData.builtins.push({
                         asset: 'OpenDoor',
-                        position: [x, y],
-                        rotation: obj.angle || 0
+                        ...builtinData
                     });
                 } else if (obj.type === 'window' || obj.type === 'windowDouble' || obj.type === 'windowBay' || obj.type === 'fix') {
                     blenderData.builtins.push({
                         asset: 'WindowPanel',
-                        position: [x, y],
-                        rotation: obj.angle || 0
+                        ...builtinData
                     });
                 }
             }
@@ -403,14 +458,122 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
 }
 
 /**
+ * Find intersection point between two line segments
+ * @param {Array} line1 - [[x1, y1], [x2, y2]]
+ * @param {Array} line2 - [[x3, y3], [x4, y4]]
+ * @returns {Array|null} [x, y] intersection point or null if no intersection
+ */
+function findLineIntersection(line1, line2) {
+    const [[x1, y1], [x2, y2]] = line1;
+    const [[x3, y3], [x4, y4]] = line2;
+    
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 1e-10) return null; // Lines are parallel
+    
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+    
+    // Check if intersection is within both line segments
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        const x = x1 + t * (x2 - x1);
+        const y = y1 + t * (y2 - y1);
+        return [x, y];
+    }
+    
+    return null;
+}
+
+/**
+ * Split walls at intersection points with other walls
+ * @param {Array} walls - Array of wall segments [[x1,y1], [x2,y2]]
+ * @returns {Array} Array of wall segments with intersection splits
+ */
+function splitWallsAtIntersections(walls) {
+    const wallSegments = [];
+    
+    for (let i = 0; i < walls.length; i++) {
+        const wall = walls[i];
+        const intersections = [];
+        
+        // Find all intersection points with other walls
+        for (let j = 0; j < walls.length; j++) {
+            if (i === j) continue;
+            
+            const otherWall = walls[j];
+            const intersection = findLineIntersection(wall, otherWall);
+            
+            if (intersection) {
+                // Calculate distance along the wall from start point
+                const [startX, startY] = wall[0];
+                const distance = Math.hypot(intersection[0] - startX, intersection[1] - startY);
+                intersections.push({ point: intersection, distance, originalWallId: i });
+            }
+        }
+        
+        // Sort intersections by distance along the wall
+        intersections.sort((a, b) => a.distance - b.distance);
+        
+        // Split the wall at intersection points
+        if (intersections.length === 0) {
+            // No intersections, keep original wall
+            wallSegments.push({
+                segment: wall,
+                originalWallId: i
+            });
+        } else {
+            // Create segments between intersection points
+            let currentStart = wall[0];
+            
+            for (let k = 0; k < intersections.length; k++) {
+                const intersection = intersections[k];
+                
+                // Only create segment if it has meaningful length
+                const segmentLength = Math.hypot(
+                    intersection.point[0] - currentStart[0],
+                    intersection.point[1] - currentStart[1]
+                );
+                
+                if (segmentLength > 0.01) { // Minimum segment length threshold
+                    wallSegments.push({
+                        segment: [currentStart, intersection.point],
+                        originalWallId: i
+                    });
+                }
+                
+                currentStart = intersection.point;
+            }
+            
+            // Add final segment from last intersection to end
+            const finalSegmentLength = Math.hypot(
+                wall[1][0] - currentStart[0],
+                wall[1][1] - currentStart[1]
+            );
+            
+            if (finalSegmentLength > 0.01) {
+                wallSegments.push({
+                    segment: [currentStart, wall[1]],
+                    originalWallId: i
+                });
+            }
+        }
+    }
+    
+    return wallSegments;
+}
+
+/**
  * Classify walls as internal or external based on room polygons
- * @returns {Object} Object with internal and external wall arrays
+ * Now works with wall segments split at intersection points
+ * @returns {Object} Object with internal and external wall segment arrays
  */
 function classifyWalls(blenderData, epsilon = 0.2) {
     if (!blenderData || !Array.isArray(blenderData.walls) || !Array.isArray(blenderData.floors)) {
         console.warn('classifyWalls: Invalid blenderData structure.');
         return { internal: [], external: blenderData && blenderData.walls ? [...blenderData.walls] : [] };
     }
+
+    // First, split walls at intersection points
+    const wallSegments = splitWallsAtIntersections(blenderData.walls);
 
     // Ray-casting point-in-polygon test
     function pointInPolygon(point, polygon) {
@@ -440,13 +603,21 @@ function classifyWalls(blenderData, epsilon = 0.2) {
     const internal = [];
     const external = [];
 
-    for (let i = 0; i < blenderData.walls.length; i++) {
-        const seg = blenderData.walls[i];
+    // Classify each wall segment
+    for (let i = 0; i < wallSegments.length; i++) {
+        const wallSegment = wallSegments[i];
+        const seg = wallSegment.segment;
+        
         if (!Array.isArray(seg) || seg.length !== 2) {
             // Malformed segment, treat as external by default
-            external.push(seg);
+            external.push({
+                segment: seg,
+                originalWallId: wallSegment.originalWallId,
+                segmentId: `wall_segment_${i}`
+            });
             continue;
         }
+        
         const ax = seg[0][0], ay = seg[0][1];
         const bx = seg[1][0], by = seg[1][1];
 
@@ -469,10 +640,16 @@ function classifyWalls(blenderData, epsilon = 0.2) {
         const side1Inside = insideAnyRoom(p1);
         const side2Inside = insideAnyRoom(p2);
 
+        const segmentData = {
+            segment: seg,
+            originalWallId: wallSegment.originalWallId,
+            segmentId: `wall_segment_${i}`
+        };
+
         if (side1Inside && side2Inside) {
-            internal.push(seg);
+            internal.push(segmentData);
         } else {
-            external.push(seg);
+            external.push(segmentData);
         }
     }
 
