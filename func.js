@@ -2002,10 +2002,28 @@ function rib(shift = 5) {
                         let startText = qSVG.middle(ribMaster[t][a][n - 1].coords.x, ribMaster[t][a][n - 1].coords.y, ribMaster[t][a][n].coords.x,
                             ribMaster[t][a][n].coords.y);
                         
+                        // Calculate perpendicular offset based on wall direction
+                        let wallIndex = ribMaster[t][a][n].wallIndex;
+                        let wall = WALLS[wallIndex];
+                        let wallAngle = wall.angle;
+                        
+                        // Calculate perpendicular direction (90 degrees from wall angle)
+                        let perpAngle = wallAngle + (Math.PI / 2);
+                        
+                        // Determine offset direction based on side
+                        let offsetDistance = Math.abs(shiftValue) + 5;
+                        if (ribMaster[t][a][n - 1].side === 'down') {
+                            perpAngle += Math.PI; // Flip to other side
+                        }
+                        
+                        let offsetX = Math.cos(perpAngle) * offsetDistance;
+                        let offsetY = Math.sin(perpAngle) * offsetDistance;
+                        
                         // Check for valid coordinates before setting attributes
                         if (startText && !isNaN(startText.x) && !isNaN(startText.y)) {
+                            // Use simple positioning - just place at wall midpoint with minimal offset
                             sizeText[n].setAttributeNS(null, 'x', startText.x);
-                            sizeText[n].setAttributeNS(null, 'y', (startText.y) + (shiftValue));
+                            sizeText[n].setAttributeNS(null, 'y', startText.y + shiftValue);
                             sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
                             sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
                             sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
@@ -2016,7 +2034,7 @@ function rib(shift = 5) {
                             } else sizeText[n].setAttributeNS(null, 'font-size', '0.9em');
                             sizeText[n].setAttributeNS(null, 'stroke-width', '0.2px');
                             sizeText[n].setAttributeNS(null, 'fill', '#555555');
-                            sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
+                            sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y + shiftValue) + ")");
                         } else {
                             // Skip creating text element if coordinates are invalid
                             console.warn('Invalid coordinates for size text element:', startText);

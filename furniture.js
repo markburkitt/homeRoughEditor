@@ -505,7 +505,7 @@ function getFurnitureData() {
         y: item.y,
         rotation: item.rotation
     }));
-   //  console.log('Saving furniture data:', data);
+    console.log('Saving furniture data:', data);
     return data;
 }
 
@@ -527,7 +527,7 @@ async function loadSavedFurnitureData(furnitureData) {
     // Recreate furniture items
     if (Array.isArray(furnitureData)) {
         furnitureData.forEach(data => {
-            //console.log('Restoring furniture item:', data);
+            console.log('Restoring furniture item:', data);
             
             // Find matching furniture type from FURNITURE_DATA
             const furnitureType = FURNITURE_DATA.find(f => f.id === data.furnitureId || f.type === data.type);
@@ -543,7 +543,10 @@ async function loadSavedFurnitureData(furnitureData) {
                     item.id = data.id;
                     item.type = data.type;
                     item.name = data.name;
-                    item.furnitureId = data.furnitureId;
+                    // Only overwrite furnitureId if it exists in saved data
+                    if (data.furnitureId) {
+                        item.furnitureId = data.furnitureId;
+                    }
                     // Prefer the latest category from FURNITURE_DATA over saved data, respecting empty string
                     try {
                         const latest = Array.isArray(FURNITURE_DATA) ? FURNITURE_DATA.find(f => f.id === data.furnitureId) : null;

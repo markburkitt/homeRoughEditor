@@ -46,6 +46,7 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
                     id: furniture.id,
                     type: furniture.type,
                     name: furniture.name,
+                    furnitureId: furniture.furnitureId,
                     category: furniture.category,
                     x: furniture.x,
                     y: furniture.y,

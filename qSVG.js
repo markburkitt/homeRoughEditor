@@ -66,12 +66,12 @@ var qSVG = {
     },
 
     middle: function(xo, yo, xd, yd) {
-        var x1 = parseInt(xo);
-        var y1 = parseInt(yo);
-        var x2 = parseInt(xd);
-        var y2 = parseInt(yd);
-        var middleX = Math.abs(x1 + x2) / 2;
-        var middleY = Math.abs(y1 + y2) / 2;
+        var x1 = parseFloat(xo);
+        var y1 = parseFloat(yo);
+        var x2 = parseFloat(xd);
+        var y2 = parseFloat(yd);
+        var middleX = (x1 + x2) / 2;
+        var middleY = (y1 + y2) / 2;
         return ({
             x: middleX,
             y: middleY
@@ -754,14 +754,19 @@ var qSVG = {
             var bestArea = parseInt(lengthRoom);
               var found = true;
               for (var sss = 0; sss < polygons.length; sss++) {
-                if (qSVG.arrayCompare(polygons[sss].way, tempSurface, 'pop') ) {
+                // Check for duplicate polygons using multiple comparison methods
+                if (qSVG.arrayCompare(polygons[sss].way, tempSurface, 'pop') || 
+                    qSVG.arrayCompare(polygons[sss].way, tempSurface) ||
+                    qSVG.arrayCompare(polygons[sss].way, tempSurface.slice().reverse(), 'pop')) {
                   found = false;
                   vertex[bestVertex].bypass = 1;
                   break;
                 }
               }
 
-              if (bestArea < 360) {
+              // Reduced minimum area threshold to allow smaller rooms
+              // Original was 360, reduced to 100 to detect small spaces like closets, bathrooms
+              if (bestArea < 100) {
                 vertex[bestVertex].bypass = 1;
               }
               if (vertex[bestVertex].bypass == 0)  { // <-------- TO REVISE IMPORTANT !!!!!!!! bestArea Control ???
@@ -772,12 +777,83 @@ var qSVG = {
                 for (var rr = 0; rr < tempSurface.length; rr++) {
                   coords.push({x: vertex[tempSurface[rr]].x, y: vertex[tempSurface[rr]].y});
                 }
-                // WARNING -> FAKE
-                if (realCoords.inside.length != realCoords.outside) {
-                  polygons.push({way: tempSurface, coords: coords, coordsOutside: realCoords.outside, coordsInside: realCoords.inside, area: realArea, outsideArea: outsideArea, realArea: bestArea});
+                // Check for duplicate polygons by comparing coordinates, not just vertex indices
+                var isDuplicate = false;
+                for (var dupCheck = 0; dupCheck < polygons.length; dupCheck++) {
+                  var existingCoords = polygons[dupCheck].coords;
+                  var newCoords = (realCoords.inside.length != realCoords.outside) ? coords : realCoords.inside;
+                  
+                  // Check if polygons have same coordinates (allowing for different starting points)
+                  if (existingCoords.length === newCoords.length) {
+                    var coordsMatch = false;
+                    for (var startIdx = 0; startIdx < existingCoords.length; startIdx++) {
+                      var allMatch = true;
+                      for (var coordIdx = 0; coordIdx < existingCoords.length; coordIdx++) {
+                        var existingIdx = coordIdx;
+                        var newIdx = (coordIdx + startIdx) % newCoords.length;
+                        if (Math.abs(existingCoords[existingIdx].x - newCoords[newIdx].x) > 1 || 
+                            Math.abs(existingCoords[existingIdx].y - newCoords[newIdx].y) > 1) {
+                          allMatch = false;
+                          break;
+                        }
+                      }
+                      if (allMatch) {
+                        coordsMatch = true;
+                        break;
+                      }
+                    }
+                    if (coordsMatch) {
+                      isDuplicate = true;
+                      break;
+                    }
+                  }
                 }
-                else { // REAL INSIDE POLYGONE -> ROOM
-                  polygons.push({way: tempSurface, coords: realCoords.inside, coordsOutside: realCoords.outside, area: realArea, outsideArea: outsideArea, realArea: bestArea});
+                
+                if (!isDuplicate) {
+                  // Filter out exterior boundary polygons - only keep interior rooms
+                  var isExteriorBoundary = false;
+                  
+                  // Check if this polygon represents the exterior boundary by comparing area
+                  // Exterior boundary typically has much larger area than interior rooms
+                  var totalFloorplanArea = 0;
+                  for (var areaCheck = 0; areaCheck < polygons.length; areaCheck++) {
+                    totalFloorplanArea += polygons[areaCheck].area;
+                  }
+                  
+                  // If this polygon's area is more than 50% of total area so far, it's likely exterior
+                  if (polygons.length > 0 && realArea > (totalFloorplanArea * 0.5)) {
+                    isExteriorBoundary = true;
+                  }
+                  
+                  // Also check if polygon has no interior polygons (exterior boundary characteristic)
+                  var hasInteriorWalls = false;
+                  for (var wallCheck = 0; wallCheck < tempSurface.length - 1; wallCheck++) {
+                    var wallStart = {x: vertex[tempSurface[wallCheck]].x, y: vertex[tempSurface[wallCheck]].y};
+                    var wallEnd = {x: vertex[tempSurface[wallCheck + 1]].x, y: vertex[tempSurface[wallCheck + 1]].y};
+                    
+                    // Check if there are other walls inside this polygon
+                    for (var otherWall = 0; otherWall < vertex.length; otherWall++) {
+                      if (tempSurface.indexOf(otherWall) === -1) { // Not part of current polygon
+                        var testPoint = {x: vertex[otherWall].x, y: vertex[otherWall].y};
+                        if (qSVG.rayCasting(testPoint, coords)) {
+                          hasInteriorWalls = true;
+                          break;
+                        }
+                      }
+                    }
+                    if (hasInteriorWalls) break;
+                  }
+                  
+                  // Only add polygon if it's not the exterior boundary
+                  if (!isExteriorBoundary || !hasInteriorWalls) {
+                    // WARNING -> FAKE
+                    if (realCoords.inside.length != realCoords.outside) {
+                      polygons.push({way: tempSurface, coords: coords, coordsOutside: realCoords.outside, coordsInside: realCoords.inside, area: realArea, outsideArea: outsideArea, realArea: bestArea});
+                    }
+                    else { // REAL INSIDE POLYGONE -> ROOM
+                      polygons.push({way: tempSurface, coords: realCoords.inside, coordsOutside: realCoords.outside, area: realArea, outsideArea: outsideArea, realArea: bestArea});
+                    }
+                  }
                 }
 
                 // REMOVE FIRST POINT OF WAY ON CHILDS FIRST VERTEX
@@ -823,15 +899,34 @@ var qSVG = {
               var polygonFree = polygons[free].coords;
               var countCoords = polygonFree.length;
               var found = true;
+              
+              // Check if all points of the free polygon are inside the current polygon
               for (pf = 0; pf < countCoords; pf++) {
                 found = qSVG.rayCasting(polygonFree[pf], polygons[pp].coords);
                 if (!found) {
                   break;
                 }
               }
+              
+              // Additional check: ensure polygons don't share edges (which would indicate overlapping, not containment)
               if (found) {
-                inside.push(free);
-                polygons[pp].area = polygons[pp].area - polygons[free].outsideArea;
+                var sharedEdges = 0;
+                for (var i = 0; i < polygons[pp].way.length; i++) {
+                  for (var j = 0; j < polygons[free].way.length; j++) {
+                    if (polygons[pp].way[i] === polygons[free].way[j]) {
+                      sharedEdges++;
+                    }
+                  }
+                }
+                
+                // More strict containment check - polygons sharing any edges are likely overlapping
+                // Also check if areas are too similar (indicating same space detected multiple times)
+                var areaSimilarity = Math.abs(polygons[pp].area - polygons[free].area) / Math.max(polygons[pp].area, polygons[free].area);
+                
+                if (sharedEdges === 0 && areaSimilarity > 0.1) {
+                  inside.push(free);
+                  polygons[pp].area = polygons[pp].area - polygons[free].outsideArea;
+                }
               }
             }
           }

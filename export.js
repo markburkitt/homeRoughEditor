@@ -197,20 +197,20 @@ function exportForBlender(filename = 'floorplan_blender', wallHeight = 2.8, wall
         blenderData.walls = [];
         
         // Add wall segment metadata for traceability
-        blenderData.wall_segments = {
-            external: external.map(seg => ({
-                segmentId: seg.segmentId,
-                originalWallId: seg.originalWallId,
-                points: seg.segment,
-                classification: 'external'
-            })),
-            internal: internal.map(seg => ({
-                segmentId: seg.segmentId,
-                originalWallId: seg.originalWallId,
-                points: seg.segment,
-                classification: 'internal'
-            }))
-        };
+        // blenderData.wall_segments = {
+        //     external: external.map(seg => ({
+        //         segmentId: seg.segmentId,
+        //         originalWallId: seg.originalWallId,
+        //         points: seg.segment,
+        //         classification: 'external'
+        //     })),
+        //     internal: internal.map(seg => ({
+        //         segmentId: seg.segmentId,
+        //         originalWallId: seg.originalWallId,
+        //         points: seg.segment,
+        //         classification: 'internal'
+        //     }))
+        // };
 
         // Create wall object with all outlines
         const exwallObject = {
