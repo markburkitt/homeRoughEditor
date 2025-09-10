@@ -416,6 +416,63 @@ var editor = {
     }
   },
 
+  nearWallSegment: function (snap, range = 30, except = []) {
+    var bestDistance = Infinity;
+    var bestPoint = null;
+    var bestWall = null;
+    
+    for (var k = 0; k < WALLS.length; k++) {
+      if (except.indexOf(WALLS[k]) == -1) {
+        var wall = WALLS[k];
+        
+        // Calculate closest point on wall segment (line between start and end)
+        var dx = wall.end.x - wall.start.x;
+        var dy = wall.end.y - wall.start.y;
+        var length = Math.sqrt(dx * dx + dy * dy);
+        
+        if (length < 1e-6) continue; // Skip zero-length walls
+        
+        // Normalize direction vector
+        var ux = dx / length;
+        var uy = dy / length;
+        
+        // Vector from wall start to snap point
+        var px = snap.x - wall.start.x;
+        var py = snap.y - wall.start.y;
+        
+        // Project snap point onto wall line
+        var t = px * ux + py * uy;
+        
+        // Clamp t to wall segment bounds [0, length]
+        t = Math.max(0, Math.min(length, t));
+        
+        // Calculate closest point on segment
+        var closestX = wall.start.x + t * ux;
+        var closestY = wall.start.y + t * uy;
+        
+        // Calculate distance from snap point to closest point
+        var distance = Math.sqrt((snap.x - closestX) * (snap.x - closestX) + (snap.y - closestY) * (snap.y - closestY));
+        
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestPoint = { x: closestX, y: closestY };
+          bestWall = wall;
+        }
+      }
+    }
+    
+    if (bestDistance <= range) {
+      return {
+        x: bestPoint.x,
+        y: bestPoint.y,
+        wall: bestWall,
+        distance: bestDistance
+      };
+    } else {
+      return false;
+    }
+  },
+
   // USING WALLS SUPER WALL OBJECTS ARRAY
   rayCastingWall: function (snap) {
     var wallList = [];

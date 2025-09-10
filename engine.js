@@ -895,22 +895,32 @@ function _MOUSEMOVE(event) {
         }
         coords.x = snap.x;
         coords.y = snap.y;
-        if (magnetic != false) {
-          if (magnetic == "H") snap.x = coords.x;
-          else snap.y = coords.y;
-        }
-        if (helpConstruc = intersection(snap, 10, wallListRun)) {
-          coords.x = helpConstruc.x;
-          coords.y = helpConstruc.y;
-          snap.x = helpConstruc.x;
-          snap.y = helpConstruc.y;
+        
+        // Check for wall segment snapping (excluding walls being moved)
+        var segmentSnap = editor.nearWallSegment(snap, 20, wallListRun);
+        if (segmentSnap) {
+          coords.x = segmentSnap.x;
+          coords.y = segmentSnap.y;
+          $('#circlebinder').attr({ "class": "circleGum", cx: coords.x, cy: coords.y });
+          cursor('grab');
+        } else {
           if (magnetic != false) {
             if (magnetic == "H") snap.x = coords.x;
             else snap.y = coords.y;
           }
-          cursor('grab');
-        } else {
-          cursor('move');
+          if (helpConstruc = intersection(snap, 10, wallListRun)) {
+            coords.x = helpConstruc.x;
+            coords.y = helpConstruc.y;
+            snap.x = helpConstruc.x;
+            snap.y = helpConstruc.y;
+            if (magnetic != false) {
+              if (magnetic == "H") snap.x = coords.x;
+              else snap.y = coords.y;
+            }
+            cursor('grab');
+          } else {
+            cursor('move');
+          }
         }
         binder.remove()
         //$('#circlebinder').attr({"class": "circle_css", cx: coords.x, cy: coords.y});

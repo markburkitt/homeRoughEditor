@@ -1877,11 +1877,13 @@ function rib(shift = 5) {
             for (let p in WALLS) {
                 if (i != p && WALLS[p].equations.base) {
                     cross = qSVG.intersectionOfEquations(WALLS[i].equations.base, WALLS[p].equations.base, "object");
-                    if (qSVG.btwn(cross.x, WALLS[i].start.x, WALLS[i].end.x, 'round') &&
+                    if (cross && cross.x !== undefined && cross.y !== undefined &&
+                        qSVG.btwn(cross.x, WALLS[i].start.x, WALLS[i].end.x, 'round') &&
                         qSVG.btwn(cross.y, WALLS[i].start.y, WALLS[i].end.y, 'round')) {
 
                         inter = qSVG.intersectionOfEquations(WALLS[i].equations.up, WALLS[p].equations.up, "object");
-                        if (qSVG.btwn(inter.x, WALLS[i].coords[0].x, WALLS[i].coords[3].x, 'round') &&
+                        if (inter && inter.x !== undefined && inter.y !== undefined &&
+                            qSVG.btwn(inter.x, WALLS[i].coords[0].x, WALLS[i].coords[3].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[i].coords[0].y, WALLS[i].coords[3].y, 'round') &&
                             qSVG.btwn(inter.x, WALLS[p].coords[0].x, WALLS[p].coords[3].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[p].coords[0].y, WALLS[p].coords[3].y, 'round')) {
@@ -1891,7 +1893,8 @@ function rib(shift = 5) {
                         }
 
                         inter = qSVG.intersectionOfEquations(WALLS[i].equations.up, WALLS[p].equations.down, "object");
-                        if (qSVG.btwn(inter.x, WALLS[i].coords[0].x, WALLS[i].coords[3].x, 'round') &&
+                        if (inter && inter.x !== undefined && inter.y !== undefined &&
+                            qSVG.btwn(inter.x, WALLS[i].coords[0].x, WALLS[i].coords[3].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[i].coords[0].y, WALLS[i].coords[3].y, 'round') &&
                             qSVG.btwn(inter.x, WALLS[p].coords[1].x, WALLS[p].coords[2].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[p].coords[1].y, WALLS[p].coords[2].y, 'round')) {
@@ -1901,7 +1904,8 @@ function rib(shift = 5) {
                         }
 
                         inter = qSVG.intersectionOfEquations(WALLS[i].equations.down, WALLS[p].equations.up, "object");
-                        if (qSVG.btwn(inter.x, WALLS[i].coords[1].x, WALLS[i].coords[2].x, 'round') &&
+                        if (inter && inter.x !== undefined && inter.y !== undefined &&
+                            qSVG.btwn(inter.x, WALLS[i].coords[1].x, WALLS[i].coords[2].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[i].coords[1].y, WALLS[i].coords[2].y, 'round') &&
                             qSVG.btwn(inter.x, WALLS[p].coords[0].x, WALLS[p].coords[3].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[p].coords[0].y, WALLS[p].coords[3].y, 'round')) {
@@ -1911,7 +1915,8 @@ function rib(shift = 5) {
                         }
 
                         inter = qSVG.intersectionOfEquations(WALLS[i].equations.down, WALLS[p].equations.down, "object");
-                        if (qSVG.btwn(inter.x, WALLS[i].coords[1].x, WALLS[i].coords[2].x, 'round') &&
+                        if (inter && inter.x !== undefined && inter.y !== undefined &&
+                            qSVG.btwn(inter.x, WALLS[i].coords[1].x, WALLS[i].coords[2].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[i].coords[1].y, WALLS[i].coords[2].y, 'round') &&
                             qSVG.btwn(inter.x, WALLS[p].coords[1].x, WALLS[p].coords[2].x, 'round') &&
                             qSVG.btwn(inter.y, WALLS[p].coords[1].y, WALLS[p].coords[2].y, 'round')) {

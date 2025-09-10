@@ -193,47 +193,17 @@ function importAIWallsData(jsonData) {
         }
 
         // Connect walls by matching endpoints (with small tolerance)
-        // Snap endpoints that are very close together to exact same coordinates
         const tol = 1e-3;
         const eq = (a, b) => (Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol);
         
-        // First pass: snap close endpoints to exact coordinates
-        for (let i = 0; i < created.length; i++) {
-            const wi = created[i];
-            for (let j = i + 1; j < created.length; j++) {
-                const wj = created[j];
-                
-                // Snap wi.end to wj.start if they're close
-                if (eq(wi.end, wj.start)) {
-                    wj.start.x = wi.end.x;
-                    wj.start.y = wi.end.y;
-                }
-                // Snap wi.start to wj.end if they're close
-                if (eq(wi.start, wj.end)) {
-                    wi.start.x = wj.end.x;
-                    wi.start.y = wj.end.y;
-                }
-                // Snap wi.end to wj.end if they're close
-                if (eq(wi.end, wj.end)) {
-                    wj.end.x = wi.end.x;
-                    wj.end.y = wi.end.y;
-                }
-                // Snap wi.start to wj.start if they're close
-                if (eq(wi.start, wj.start)) {
-                    wj.start.x = wi.start.x;
-                    wj.start.y = wi.start.y;
-                }
-            }
-        }
-        
-        // Second pass: connect walls with exact coordinate matching
+        // Connect walls using tolerance-based matching (no coordinate snapping)
         for (let i = 0; i < created.length; i++) {
             const wi = created[i];
             for (let j = 0; j < created.length; j++) {
                 if (i === j) continue;
                 const wj = created[j];
-                if (!wi.parent && wj.end.x === wi.start.x && wj.end.y === wi.start.y) wi.parent = wj;
-                if (!wi.child && wj.start.x === wi.end.x && wj.start.y === wi.end.y) wi.child = wj;
+                if (!wi.parent && eq(wj.end, wi.start)) wi.parent = wj;
+                if (!wi.child && eq(wj.start, wi.end)) wi.child = wj;
                 if (wi.parent && wi.child) break;
             }
         }
