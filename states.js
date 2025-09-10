@@ -386,15 +386,15 @@ function updateFloorplanHeight() {
  */
 function scaleAllElementsUniformly(scaleFactor) {
     try {
-        // Calculate bounds and use center as origin point to preserve relative positioning
+        // Calculate bounds and origin point for rigid scaling
         const bounds = calculateFloorplanBounds();
-        const originX = bounds.minX + bounds.width / 2;
-        const originY = bounds.minY + bounds.height / 2;
+        const originX = bounds.minX;
+        const originY = bounds.minY;
         
         console.log('Rigid scaling by factor:', scaleFactor, 'Origin:', originX, originY);
         
         WALLS.forEach(wall => {
-            // Scale from center origin point to preserve relative positioning
+            // Scale from fixed origin point (top-left) to maintain wall angles
             wall.start.x = originX + (wall.start.x - originX) * scaleFactor;
             wall.start.y = originY + (wall.start.y - originY) * scaleFactor;
             
@@ -448,77 +448,6 @@ function scaleAllElementsUniformly(scaleFactor) {
                     // Scale furniture size
                     if (obj.size !== undefined) {
                         obj.size = obj.size * scaleFactor;
-                    }
-                }
-            });
-        }
-
-        // Scale furniture, lights, and cameras positions
-        if (typeof FURNITURE_ITEMS !== 'undefined' && Array.isArray(FURNITURE_ITEMS)) {
-            FURNITURE_ITEMS.forEach(item => {
-                if (item) {
-                    item.x = originX + (item.x - originX) * scaleFactor;
-                    item.y = originY + (item.y - originY) * scaleFactor;
-                    // Update visual element transform
-                    if (item.graph) {
-                        // Handle jQuery object - use .attr() method instead of setAttribute
-                        if (item.graph.attr) {
-                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
-                            // Handle rotation separately on the rotation group
-                            if (item.rotGroup && item.rotGroup.attr) {
-                                item.rotGroup.attr('transform', `rotate(${item.rotation || 0}) scale(${item.size || 1})`);
-                            }
-                        } else if (item.graph.setAttribute) {
-                            // Fallback for native DOM elements
-                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y}) rotate(${item.rotation || 0}) scale(${item.size || 1})`);
-                        }
-                    }
-                }
-            });
-        }
-
-        if (typeof LIGHT_ITEMS !== 'undefined' && Array.isArray(LIGHT_ITEMS)) {
-            LIGHT_ITEMS.forEach(item => {
-                if (item) {
-                    item.x = originX + (item.x - originX) * scaleFactor;
-                    item.y = originY + (item.y - originY) * scaleFactor;
-                    // Update visual element transform
-                    if (item.graph) {
-                        // Handle jQuery object - use .attr() method instead of setAttribute
-                        if (item.graph.attr) {
-                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
-                        } else if (item.graph.setAttribute) {
-                            // Fallback for native DOM elements
-                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
-                        }
-                    }
-                }
-            });
-        }
-
-        if (typeof CAMERA_ITEMS !== 'undefined' && Array.isArray(CAMERA_ITEMS)) {
-            CAMERA_ITEMS.forEach(item => {
-                if (item) {
-                    item.x = originX + (item.x - originX) * scaleFactor;
-                    item.y = originY + (item.y - originY) * scaleFactor;
-                    // Update visual element transform - cameras have rotation
-                    if (item.graph) {
-                        // Handle jQuery object - use .attr() method instead of setAttribute
-                        if (item.graph.attr) {
-                            item.graph.attr('transform', `translate(${item.x}, ${item.y})`);
-                            // Update rotation group if it exists
-                            if (item.rotGroup && item.rotGroup.attr) {
-                                item.rotGroup.attr('transform', `rotate(${item.rotation || 0})`);
-                            }
-                        } else if (item.graph.setAttribute) {
-                            // Fallback for native DOM elements
-                            item.graph.setAttribute('transform', `translate(${item.x}, ${item.y})`);
-                            // Update rotation group if it exists
-                            const rotGroup = item.graph.querySelector('.camera-rotation');
-                            if (rotGroup) {
-                                rotGroup.setAttribute('transform', `rotate(${item.rotation || 0})`);
-                            }
-                        }
                     }
                 }
             });
@@ -590,6 +519,8 @@ function scaleAllElementsUniformly(scaleFactor) {
         console.error('scaleAllElementsUniformly error:', e);
     }
 }
+
+
 
 /**
  * Get the actual displayed dimensions by checking the measurement ribbons
