@@ -1143,7 +1143,7 @@ function _MOUSEMOVE(event) {
             var eq = qSVG.createEquation(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
             var nearPoint = qSVG.nearPointOnEquation(eq, obj);
             
-            if (nearPoint.distance < 0.01 && qSVG.btwn(obj.x, wall.start.x, wall.end.x) && qSVG.btwn(obj.y, wall.start.y, wall.end.y)) {
+            if (nearPoint.distance < 0.1 && qSVG.btwn(obj.x, wall.start.x, wall.end.x) && qSVG.btwn(obj.y, wall.start.y, wall.end.y)) {
               isAttachedToWall = true;
               break;
             }

@@ -486,7 +486,7 @@ var editor = {
       if (OBJDATA[scan].family == 'inWall') {
         var eq = qSVG.createEquation(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
         search = qSVG.nearPointOnEquation(eq, OBJDATA[scan]);
-        if (search.distance < 0.01 && qSVG.btwn(OBJDATA[scan].x, wall.start.x, wall.end.x) && qSVG.btwn(OBJDATA[scan].y, wall.start.y, wall.end.y)) objList.push(OBJDATA[scan]);
+        if (search.distance < 0.1 && qSVG.btwn(OBJDATA[scan].x, wall.start.x, wall.end.x) && qSVG.btwn(OBJDATA[scan].y, wall.start.y, wall.end.y)) objList.push(OBJDATA[scan]);
         // WARNING 0.01 TO NO COUNT OBJECT ON LIMITS OF THE EDGE !!!!!!!!!!!! UGLY CODE( MOUSE PRECISION)
         // TRY WITH ANGLE MAYBE ???
       }
