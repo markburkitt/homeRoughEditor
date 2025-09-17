@@ -1241,51 +1241,126 @@ function showBackgroundImageTools() {
         }
 
         const pxPerMeter = (typeof meter !== 'undefined') ? meter : 160; // editor scale
-        const widthMInput = document.getElementById('backgroundImageWidthM');
-        const heightMInput = document.getElementById('backgroundImageHeightM');
+        
+        // Helper functions for feet/inches conversion
+        function metersToFeetInches(meters) {
+            const totalInches = Math.round(meters * 39.3701); // Round total inches first
+            let feet = Math.floor(totalInches / 12);
+            let inches = totalInches % 12;
+            
+            // Handle the case where modulo gives us 12 (shouldn't happen but let's be safe)
+            if (inches >= 12) {
+                feet += Math.floor(inches / 12);
+                inches = inches % 12;
+            }
+            
+            return { feet: feet, inches: inches };
+        }
+        
+        function feetInchesToMeters(feet, inches) {
+            const totalInches = (feet || 0) * 12 + (inches || 0);
+            return totalInches / 39.3701; // Convert inches to meters
+        }
+        
+        // Get input elements
+        const widthFtInput = document.getElementById('backgroundImageWidthFt');
+        const widthInInput = document.getElementById('backgroundImageWidthIn');
+        const heightFtInput = document.getElementById('backgroundImageHeightFt');
+        const heightInInput = document.getElementById('backgroundImageHeightIn');
         const aspectInfo = document.getElementById('backgroundImageAspectInfo');
 
-        if (widthMInput) widthMInput.value = (currentWidthPx / pxPerMeter).toFixed(2);
-        if (heightMInput) heightMInput.value = (currentHeightPx / pxPerMeter).toFixed(2);
+        // Convert current dimensions to feet/inches and populate inputs
+        const currentWidthM = currentWidthPx / pxPerMeter;
+        const currentHeightM = currentHeightPx / pxPerMeter;
+        const widthFtIn = metersToFeetInches(currentWidthM);
+        const heightFtIn = metersToFeetInches(currentHeightM);
+        
+        if (widthFtInput) widthFtInput.value = widthFtIn.feet;
+        if (widthInInput) widthInInput.value = widthFtIn.inches;
+        if (heightFtInput) heightFtInput.value = heightFtIn.feet;
+        if (heightInInput) heightInInput.value = heightFtIn.inches;
         if (aspectInfo) aspectInfo.textContent = `Aspect ratio: ${(aspect).toFixed(4)} (W/H)`;
 
+        // Function to validate and clamp inches input
+        function validateInches(input) {
+            let value = parseInt(input.value) || 0;
+            if (value < 0) value = 0;
+            if (value > 11) value = 11;
+            input.value = value;
+            return value;
+        }
+
+        // Function to validate and clamp feet input
+        function validateFeet(input) {
+            let value = parseInt(input.value) || 4;
+            if (value < 4) value = 4;
+            input.value = value;
+            return value;
+        }
+
+        // Function to update image dimensions from width inputs
+        function updateFromWidth() {
+            const img = document.getElementById('backgroundImage');
+            if (!img) return;
+            const curX = parseFloat(img.getAttribute('x')) || 0;
+            const curY = parseFloat(img.getAttribute('y')) || 0;
+            const ar = parseFloat(img.dataset.aspectRatio) || aspect;
+            
+            const widthFt = validateFeet(widthFtInput);
+            const widthIn = validateInches(widthInInput);
+            const wM = feetInchesToMeters(widthFt, widthIn);
+            
+            if (wM <= 0) return;
+            
+            const wPx = wM * pxPerMeter;
+            const hPx = wPx / ar;
+            const hM = hPx / pxPerMeter;
+            
+            img.setAttribute('width', String(wPx));
+            img.setAttribute('height', String(hPx));
+            img.setAttribute('x', String(curX));
+            img.setAttribute('y', String(curY));
+            
+            // Update height inputs
+            const heightFtIn = metersToFeetInches(hM);
+            if (heightFtInput) heightFtInput.value = heightFtIn.feet;
+            if (heightInInput) heightInInput.value = heightFtIn.inches;
+        }
+        
+        // Function to update image dimensions from height inputs
+        function updateFromHeight() {
+            const img = document.getElementById('backgroundImage');
+            if (!img) return;
+            const curX = parseFloat(img.getAttribute('x')) || 0;
+            const curY = parseFloat(img.getAttribute('y')) || 0;
+            const ar = parseFloat(img.dataset.aspectRatio) || aspect;
+            
+            const heightFt = validateFeet(heightFtInput);
+            const heightIn = validateInches(heightInInput);
+            const hM = feetInchesToMeters(heightFt, heightIn);
+            
+            if (hM <= 0) return;
+            
+            const hPx = hM * pxPerMeter;
+            const wPx = hPx * ar;
+            const wM = wPx / pxPerMeter;
+            
+            img.setAttribute('width', String(wPx));
+            img.setAttribute('height', String(hPx));
+            img.setAttribute('x', String(curX));
+            img.setAttribute('y', String(curY));
+            
+            // Update width inputs
+            const widthFtIn = metersToFeetInches(wM);
+            if (widthFtInput) widthFtInput.value = widthFtIn.feet;
+            if (widthInInput) widthInInput.value = widthFtIn.inches;
+        }
+
         // Bind input handlers to maintain aspect ratio
-        if (widthMInput) {
-            widthMInput.oninput = function(e) {
-                const img = document.getElementById('backgroundImage');
-                if (!img) return;
-                const curX = parseFloat(img.getAttribute('x')) || 0;
-                const curY = parseFloat(img.getAttribute('y')) || 0;
-                const ar = parseFloat(img.dataset.aspectRatio) || aspect;
-                const wM = parseFloat(e.target.value);
-                if (!isFinite(wM) || wM <= 0) return;
-                const wPx = wM * pxPerMeter;
-                const hPx = wPx / ar;
-                img.setAttribute('width', String(wPx));
-                img.setAttribute('height', String(hPx));
-                img.setAttribute('x', String(curX));
-                img.setAttribute('y', String(curY));
-                if (heightMInput) heightMInput.value = (hPx / pxPerMeter).toFixed(2);
-            };
-        }
-        if (heightMInput) {
-            heightMInput.oninput = function(e) {
-                const img = document.getElementById('backgroundImage');
-                if (!img) return;
-                const curX = parseFloat(img.getAttribute('x')) || 0;
-                const curY = parseFloat(img.getAttribute('y')) || 0;
-                const ar = parseFloat(img.dataset.aspectRatio) || aspect;
-                const hM = parseFloat(e.target.value);
-                if (!isFinite(hM) || hM <= 0) return;
-                const hPx = hM * pxPerMeter;
-                const wPx = hPx * ar;
-                img.setAttribute('width', String(wPx));
-                img.setAttribute('height', String(hPx));
-                img.setAttribute('x', String(curX));
-                img.setAttribute('y', String(curY));
-                if (widthMInput) widthMInput.value = (wPx / pxPerMeter).toFixed(2);
-            };
-        }
+        if (widthFtInput) widthFtInput.oninput = updateFromWidth;
+        if (widthInInput) widthInInput.oninput = updateFromWidth;
+        if (heightFtInput) heightFtInput.oninput = updateFromHeight;
+        if (heightInInput) heightInInput.oninput = updateFromHeight;
 
         // Initialize opacity slider and label
         const opacityPercent = Math.round(currentOpacity * 100);

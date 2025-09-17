@@ -35,9 +35,15 @@ var meter = 160;
 
 // Utility functions for converting meters to feet/inches display format
 function metersToFeetInches(meters) {
-    const totalInches = meters * 39.3701; // Convert meters to inches
-    const feet = Math.floor(totalInches / 12);
-    const inches = Math.round(totalInches % 12);
+    const totalInches = Math.round(meters * 39.3701); // Round total inches first
+    let feet = Math.floor(totalInches / 12);
+    let inches = totalInches % 12;
+    
+    // Handle rollover when inches = 12
+    if (inches >= 12) {
+        feet += Math.floor(inches / 12);
+        inches = inches % 12;
+    }
     
     if (feet > 0 && inches > 0) {
         return `${feet}' ${inches}"`;

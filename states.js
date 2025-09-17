@@ -3,6 +3,43 @@
  * Handles floorplan mode, scaling mode, and other state transitions
  */
 
+// Helper functions for feet/inches conversion in scaling mode
+function scalingMetersToFeetInches(meters) {
+    const totalInches = Math.round(meters * 39.3701); // Round total inches first
+    let feet = Math.floor(totalInches / 12);
+    let inches = totalInches % 12;
+    
+    // Handle the case where modulo gives us 12 (shouldn't happen but let's be safe)
+    if (inches >= 12) {
+        feet += Math.floor(inches / 12);
+        inches = inches % 12;
+    }
+    
+    return { feet: feet, inches: inches };
+}
+
+function scalingFeetInchesToMeters(feet, inches) {
+    const totalInches = (feet || 0) * 12 + (inches || 0);
+    return totalInches / 39.3701; // Convert inches to meters
+}
+
+// Function to validate and clamp inches input for scaling
+function scalingValidateInches(input) {
+    let value = parseInt(input.value) || 0;
+    if (value < 0) value = 0;
+    if (value > 11) value = 11;
+    input.value = value;
+    return value;
+}
+
+// Function to validate and clamp feet input for scaling
+function scalingValidateFeet(input) {
+    let value = parseInt(input.value) || 4;
+    if (value < 4) value = 4;
+    input.value = value;
+    return value;
+}
+
 // ------------------------ Floorplan Mode (view floorplan under walls) ------------------------
 /**
  * Make walls translucent and trigger the same behavior as a double-click on the floorplan.
@@ -135,9 +172,6 @@ function enterScalingMode() {
         const currentWidth = bounds.width;
         const currentHeight = bounds.height;
         
-        console.log('Calculated bounds:', bounds);
-        console.log('WALLS array:', WALLS);
-        
         // Store original dimensions and bounds for reference
         window.__originalDimensions = { width: currentWidth, height: currentHeight };
         window.__originalBounds = bounds;
@@ -184,39 +218,41 @@ function enterScalingMode() {
         // Store aspect ratio for maintaining proportions
         window.__originalAspectRatio = currentWidth / currentHeight;
         
-        // Use setTimeout to ensure DOM elements are accessible after panel is shown
-        setTimeout(() => {
-            // Use bounds calculation instead of measurement ribbons for more accurate dimensions
-            const bounds = calculateFloorplanBounds();
-            const widthInMeters = (bounds.width / meter);
-            const heightInMeters = (bounds.height / meter);
+        // Update input values directly - no delay needed
+        const widthInMeters = (bounds.width / meter);
+        const heightInMeters = (bounds.height / meter);
+        
+        // Get feet/inches input elements
+        const widthFtInput = document.getElementById('floorplanWidthFt');
+        const widthInInput = document.getElementById('floorplanWidthIn');
+        const heightFtInput = document.getElementById('floorplanHeightFt');
+        const heightInInput = document.getElementById('floorplanHeightIn');
+        const originalDimSpan = document.getElementById('originalDimensions');
+        const scaleFactorSpan = document.getElementById('scaleFactor');
+        
+        if (widthFtInput && widthInInput && heightFtInput && heightInInput && originalDimSpan && scaleFactorSpan) {
+            // Convert current dimensions to feet/inches
+            const widthFtIn = scalingMetersToFeetInches(widthInMeters);
+            const heightFtIn = scalingMetersToFeetInches(heightInMeters);
             
-            const widthInput = document.getElementById('floorplanWidth');
-            const heightInput = document.getElementById('floorplanHeight');
-            const originalDimSpan = document.getElementById('originalDimensions');
-            const scaleFactorSpan = document.getElementById('scaleFactor');
+            // Populate feet/inches inputs
+            widthFtInput.value = widthFtIn.feet;
+            widthInInput.value = widthFtIn.inches;
+            heightFtInput.value = heightFtIn.feet;
+            heightInInput.value = heightFtIn.inches;
             
-            if (widthInput && heightInput && originalDimSpan && scaleFactorSpan) {
-                // Keep decimal precision for accurate scaling
-                const displayWidth = parseFloat(widthInMeters.toFixed(2));
-                const displayHeight = parseFloat(heightInMeters.toFixed(2));
-                
-                widthInput.value = displayWidth;
-                heightInput.value = displayHeight;
-                originalDimSpan.textContent = `${displayWidth}m × ${displayHeight}m`;
-                scaleFactorSpan.textContent = '1.0';
-                
-                // Store exact dimensions for scaling calculations
-                window.__originalDimensions = { 
-                    width: bounds.width, 
-                    height: bounds.height 
-                };
-                
-                console.log('Set input values from bounds calculation:', displayWidth, displayHeight);
-            } else {
-                console.error('Could not find scaling UI elements');
-            }
-        }, 500); // Increased delay to ensure measurements are rendered
+            // Update display with feet/inches format
+            originalDimSpan.textContent = `${widthFtIn.feet}' ${widthFtIn.inches}" × ${heightFtIn.feet}' ${heightFtIn.inches}"`;
+            scaleFactorSpan.textContent = '1.0';
+            
+            // Store exact dimensions for scaling calculations
+            window.__originalDimensions = { 
+                width: bounds.width, 
+                height: bounds.height 
+            };
+        } else {
+            console.error('Could not find scaling UI elements');
+        }
         
         // Update button text
         if (window.__scalingBtn) {
@@ -227,8 +263,6 @@ function enterScalingMode() {
         if (typeof window.updateBackgroundImageCursor === 'function') {
             window.updateBackgroundImageCursor();
         }
-        
-        console.log('Entered scaling mode. Current dimensions:', currentWidth, 'x', currentHeight);
     } catch (e) {
         console.error('enterScalingMode error:', e);
     }
@@ -316,11 +350,17 @@ function updateFloorplanWidth() {
     if (!window.__scalingMode) return;
     
     try {
-        const newWidthM = parseFloat(document.getElementById('floorplanWidth').value);
+        // Get feet/inches inputs and validate
+        const widthFtInput = document.getElementById('floorplanWidthFt');
+        const widthInInput = document.getElementById('floorplanWidthIn');
         
-        if (isNaN(newWidthM) || newWidthM <= 0) {
-            return;
-        }
+        if (!widthFtInput || !widthInInput) return;
+        
+        const widthFt = scalingValidateFeet(widthFtInput);
+        const widthIn = scalingValidateInches(widthInInput);
+        const newWidthM = scalingFeetInchesToMeters(widthFt, widthIn);
+        
+        if (newWidthM <= 0) return;
         
         // Calculate current floorplan bounds
         const currentBounds = calculateFloorplanBounds();
@@ -332,7 +372,13 @@ function updateFloorplanWidth() {
         
         // Update height to maintain aspect ratio (both dimensions scale by same factor)
         const newHeightM = currentHeightM * scaleFactor;
-        document.getElementById('floorplanHeight').value = newHeightM.toFixed(1);
+        const heightFtIn = scalingMetersToFeetInches(newHeightM);
+        
+        // Update height inputs
+        const heightFtInput = document.getElementById('floorplanHeightFt');
+        const heightInInput = document.getElementById('floorplanHeightIn');
+        if (heightFtInput) heightFtInput.value = heightFtIn.feet;
+        if (heightInInput) heightInInput.value = heightFtIn.inches;
         
         // Update scale factor display
         document.getElementById('scaleFactor').textContent = scaleFactor.toFixed(2);
@@ -352,11 +398,17 @@ function updateFloorplanHeight() {
     if (!window.__scalingMode) return;
     
     try {
-        const newHeightM = parseFloat(document.getElementById('floorplanHeight').value);
+        // Get feet/inches inputs and validate
+        const heightFtInput = document.getElementById('floorplanHeightFt');
+        const heightInInput = document.getElementById('floorplanHeightIn');
         
-        if (isNaN(newHeightM) || newHeightM <= 0) {
-            return;
-        }
+        if (!heightFtInput || !heightInInput) return;
+        
+        const heightFt = scalingValidateFeet(heightFtInput);
+        const heightIn = scalingValidateInches(heightInInput);
+        const newHeightM = scalingFeetInchesToMeters(heightFt, heightIn);
+        
+        if (newHeightM <= 0) return;
         
         // Calculate current floorplan bounds
         const currentBounds = calculateFloorplanBounds();
@@ -368,7 +420,13 @@ function updateFloorplanHeight() {
         
         // Update width to maintain aspect ratio (both dimensions scale by same factor)
         const newWidthM = currentWidthM * scaleFactor;
-        document.getElementById('floorplanWidth').value = newWidthM.toFixed(1);
+        const widthFtIn = scalingMetersToFeetInches(newWidthM);
+        
+        // Update width inputs
+        const widthFtInput = document.getElementById('floorplanWidthFt');
+        const widthInInput = document.getElementById('floorplanWidthIn');
+        if (widthFtInput) widthFtInput.value = widthFtIn.feet;
+        if (widthInInput) widthInInput.value = widthFtIn.inches;
         
         // Update scale factor display
         document.getElementById('scaleFactor').textContent = scaleFactor.toFixed(2);
