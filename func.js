@@ -50,7 +50,68 @@ function metersToFeetInches(meters) {
 
 function metersToSquareFeet(squareMeters) {
     const squareFeet = squareMeters * 10.7639; // Convert square meters to square feet
-    return Math.round(squareFeet) + ' sq ft';
+    return Math.round(squareFeet) + ' ft²';
+}
+
+function getRoomDimensions(room) {
+    try {
+        if (!room || !room.coords || room.coords.length < 3) {
+            return 'Unknown';
+        }
+        
+        // Use a simpler approach: find the center of the room and estimate dimensions
+        const center = getRoomCenter(room.coords);
+        const dimensions = estimateRoomDimensions(room.coords, center);
+        
+        if (!dimensions) {
+            return 'Unknown';
+        }
+        
+        // Convert pixel dimensions to meters, then to feet/inches
+        const widthInMeters = dimensions.width / meter;
+        const heightInMeters = dimensions.height / meter;
+        
+        const widthDisplay = metersToFeetInches(widthInMeters);
+        const heightDisplay = metersToFeetInches(heightInMeters);
+        
+        return `${widthDisplay} x ${heightDisplay}`;
+    } catch (error) {
+        console.warn('Error calculating room dimensions:', error);
+        return 'Unknown';
+    }
+}
+
+function getRoomCenter(coords) {
+    let sumX = 0, sumY = 0;
+    for (let i = 0; i < coords.length; i++) {
+        sumX += coords[i].x;
+        sumY += coords[i].y;
+    }
+    return {
+        x: sumX / coords.length,
+        y: sumY / coords.length
+    };
+}
+
+function estimateRoomDimensions(coords, center) {
+    // Find the bounding box but shrink it by 10% to approximate usable space
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    for (let i = 0; i < coords.length; i++) {
+        const coord = coords[i];
+        if (coord.x < minX) minX = coord.x;
+        if (coord.x > maxX) maxX = coord.x;
+        if (coord.y < minY) minY = coord.y;
+        if (coord.y > maxY) maxY = coord.y;
+    }
+    
+    // Shrink by 10% to approximate usable rectangular space
+    const rawWidth = maxX - minX;
+    const rawHeight = maxY - minY;
+    const width = rawWidth * 0.9;
+    const height = rawHeight * 0.9;
+    
+    return { width: width, height: height };
 }
 grid_snap = 'off';
 colorbackground = "#ffffff";
@@ -1382,13 +1443,13 @@ function limitObj(equation, size, coords, message = false) {
 }
 
 function zoom_maker(lens, xmove, xview) {
-    if (lens === 'zoomin' && zoom < 12) {
+    if (lens === 'zoomin' && zoom < 20) {
         zoom++;
         width_viewbox = width_viewbox - xmove;
         let ratioWidthZoom = taille_w / width_viewbox;
         height_viewbox = width_viewbox * ratio_viewbox;
         myDiv = document.getElementById("scaleVal");
-        if (myDiv) myDiv.style.width = 60 * ratioWidthZoom + 'px';
+        if (myDiv) myDiv.style.width = (meter * ratioWidthZoom) / 3.28084 + 'px';
         originX_viewbox = originX_viewbox + (xmove / 2);
         originY_viewbox = originY_viewbox + (xmove / 2 * ratio_viewbox);
     }
@@ -1398,7 +1459,7 @@ function zoom_maker(lens, xmove, xview) {
         let ratioWidthZoom = taille_w / width_viewbox;
         height_viewbox = width_viewbox * ratio_viewbox;
         myDiv = document.getElementById("scaleVal");
-        if (myDiv) myDiv.style.width = 60 * ratioWidthZoom + 'px';
+        if (myDiv) myDiv.style.width = (meter * ratioWidthZoom) / 3.28084 + 'px';
         originX_viewbox = originX_viewbox - (xmove / 2);
         originY_viewbox = originY_viewbox - (xmove / 2 * ratio_viewbox);
     }
@@ -1537,7 +1598,7 @@ function centerFloorplanView(padding = 40) {
         const scaleEl = document.getElementById('scaleVal');
         if (scaleEl) {
             const ratioWidthZoom = taille_w / width_viewbox;
-            scaleEl.style.width = (60 * ratioWidthZoom) + 'px';
+            scaleEl.style.width = (meter * ratioWidthZoom) / 3.28084 + 'px';
         }
 
         // Apply viewBox to all SVGs

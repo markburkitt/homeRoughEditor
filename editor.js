@@ -932,17 +932,16 @@ var editor = {
       }
 
       if (ROOM[rr].name != '') centroid.y = centroid.y + 20;
-      var areaInSquareMeters = (ROOM[rr].area) / (meter * meter);
-      var area = (typeof metersToSquareFeet === 'function') ? 
-          metersToSquareFeet(areaInSquareMeters) : 
-          areaInSquareMeters.toFixed(2) + ' m²';
+      var roomDimensions = (typeof getRoomDimensions === 'function') ? 
+          getRoomDimensions(ROOM[rr]) : 
+          'Unknown';
       var styled = { color: '#343938', fontSize: '18px', fontWeight: 'normal' };
       if (ROOM[rr].surface != '') {
         styled.fontWeight = 'bold';
-        area = ROOM[rr].surface + ' sq ft';
+        roomDimensions = ROOM[rr].surface;
       }
       if (ROOM[rr].color == 'gradientBlack' || ROOM[rr].color == 'gradientBlue') styled.color = 'white';
-      if (ROOM[rr].showSurface) qSVG.textOnDiv(area, centroid, styled, 'boxArea');
+      if (ROOM[rr].showSurface) qSVG.textOnDiv(roomDimensions, centroid, styled, 'boxArea');
     }
     if (globalArea <= 0) {
       globalArea = 0;
