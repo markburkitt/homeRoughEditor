@@ -2,6 +2,42 @@ document.querySelector('#lin').addEventListener("mouseup", _MOUSEUP);
 document.querySelector('#lin').addEventListener("mousemove", throttle(function (event) { _MOUSEMOVE(event); }, 30));
 document.querySelector('#lin').addEventListener("mousedown", _MOUSEDOWN, true);
 
+// Add mouse leave handler to cancel drag when mouse exits viewport
+document.querySelector('#lin').addEventListener("mouseleave", function(event) {
+  if (drag === 'on') {
+    drag = 'off';
+    $('#lin').css('cursor', 'default');
+    // Clear any pending placements
+    if (window._pendingFurniturePlacement) {
+      window._pendingFurniturePlacement = null;
+    }
+    if (window._pendingCameraPlacement) {
+      window._pendingCameraPlacement = null;
+    }
+    if (window._pendingLightPlacement) {
+      window._pendingLightPlacement = null;
+    }
+  }
+});
+
+// Add global mouse up handler to catch mouse up events outside viewport
+document.addEventListener("mouseup", function(event) {
+  if (drag === 'on') {
+    drag = 'off';
+    $('#lin').css('cursor', 'default');
+    // Clear any pending placements
+    if (window._pendingFurniturePlacement) {
+      window._pendingFurniturePlacement = null;
+    }
+    if (window._pendingCameraPlacement) {
+      window._pendingCameraPlacement = null;
+    }
+    if (window._pendingLightPlacement) {
+      window._pendingLightPlacement = null;
+    }
+  }
+});
+
 $(document).on('click', '#lin', function (event) {
   event.preventDefault();
 });
@@ -825,13 +861,16 @@ function _MOUSEMOVE(event) {
         // SHOW WALL SIZE -------------------------------------------------------------------------
         var startText = qSVG.middle(pox, poy, x, y);
         var angleText = qSVG.angle(pox, poy, x, y);
-        var valueText = ((qSVG.measure({
+        var valueText = qSVG.measure({
           x: pox,
           y: poy
         }, {
           x: x,
           y: y
-        })) / 60).toFixed(2);
+        });
+        var displayText = (typeof metersToFeetInches === 'function') ? 
+            metersToFeetInches(valueText / meter) : 
+            (valueText / meter).toFixed(2) + ' m';
         if (typeof (lengthTemp) == 'undefined') {
           lengthTemp = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           lengthTemp.setAttributeNS(null, 'x', startText.x);
@@ -840,16 +879,16 @@ function _MOUSEMOVE(event) {
           lengthTemp.setAttributeNS(null, 'stroke', 'none');
           lengthTemp.setAttributeNS(null, 'stroke-width', '0.6px');
           lengthTemp.setAttributeNS(null, 'fill', '#777777');
-          lengthTemp.textContent = valueText + 'm';
+          lengthTemp.textContent = displayText;
           $('#boxbind').append(lengthTemp);
         }
-        if (typeof (lengthTemp) != 'undefined' && valueText > 0.1) {
+        if (typeof (lengthTemp) != 'undefined' && (valueText / meter) > 0.1) {
           lengthTemp.setAttributeNS(null, 'x', startText.x);
           lengthTemp.setAttributeNS(null, 'y', (startText.y) - 15);
           lengthTemp.setAttribute("transform", "rotate(" + angleText.deg + " " + startText.x + "," + startText.y + ")");
-          lengthTemp.textContent = valueText + ' m';
+          lengthTemp.textContent = displayText;
         }
-        if (typeof (lengthTemp) != 'undefined' && valueText < 0.1) {
+        if (typeof (lengthTemp) != 'undefined' && (valueText / meter) < 0.1) {
           lengthTemp.textContent = "";
         }
       }
@@ -1320,8 +1359,9 @@ function _MOUSEMOVE(event) {
   if ((mode == 'select_mode' || mode == 'furniture_placement_mode' || mode == 'furniture_mode' || mode == 'camera_placement_mode' || mode == 'camera_mode' || mode == 'light_placement_mode' || mode == 'light_mode') && drag == 'on' && (!backgroundImageToolsOpen || floorplanMode) && !window.draggingFurnitureItem && !window.draggingBackgroundImage && !draggingCameraItem && !window.draggingLightItem) {
     snap = calcul_snap(event, grid_snap);
     $('#lin').css('cursor', 'move');
-    distX = (snap.xMouse - pox) * factor;
-    distY = (snap.yMouse - poy) * factor;
+    // Fixed: Remove factor multiplication since snap.xMouse/yMouse and pox/poy are already in SVG coordinate space
+    distX = snap.xMouse - pox;
+    distY = snap.yMouse - poy;
     // pox = event.pageX;
     // poy = event.pageY;
     zoom_maker('zoomdrag', distX, distY);
