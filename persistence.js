@@ -131,7 +131,11 @@ function exportFloorplanJSON(filename = 'floorplan', includeMetadata = true) {
                 totalFurniture: furnitureDataForExport.length,
                 totalLights: lightsDataForExport.length,
                 totalCameras: camerasDataForExport.length,
-                totalArea: typeof globalArea !== 'undefined' ? (globalArea / 3600).toFixed(2) + ' m²' : 'Not calculated',
+                totalArea: typeof globalArea !== 'undefined' ? 
+                    ((typeof metersToSquareFeet === 'function') ? 
+                        metersToSquareFeet(globalArea / 3600) : 
+                        (globalArea / 3600).toFixed(2) + ' m²') : 
+                    'Not calculated',
                 settings: {
                     wallSize: wallSize,
                     partitionSize: partitionSize,

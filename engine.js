@@ -231,7 +231,9 @@ function _MOUSEMOVE(event) {
         binder.x = startText.x;
         binder.y = startText.y;
         binder.angle = angleText.deg;
-        valueText = (valueText / meter).toFixed(2) + ' m';
+        valueText = (typeof metersToFeetInches === 'function') ? 
+            metersToFeetInches(valueText / meter) : 
+            (valueText / meter).toFixed(2) + ' m';
         //labelMeasure.context.textContent = valueText;
         labelMeasure[0].textContent = valueText;
 
@@ -1854,7 +1856,10 @@ function _MOUSEUP(event) {
 
     var area = binder.area / 3600;
     binder.attr({ 'fill': 'none', 'stroke': '#ddf00a', 'stroke-width': 7 });
-    $('.size').html(area.toFixed(2) + " m²");
+    const areaDisplay = (typeof metersToSquareFeet === 'function') ? 
+        metersToSquareFeet(area) : 
+        area.toFixed(2) + " m²";
+    $('.size').html(areaDisplay);
     $('#roomIndex').val(binder.id);
     if (ROOM[binder.id].surface != '') $('#roomSurface').val(ROOM[binder.id].surface);
     else $('#roomSurface').val('');
@@ -1961,8 +1966,11 @@ function _MOUSEUP(event) {
         action = 1;
       }
       else action = 0;
-      $('#boxinfo').html('Wall added <span style=\'font-size:0.6em\'>Moy. ' + (qSVG.measure(
-        { x: pox, y: poy }, { x: x, y: y }) / 60).toFixed(2) + ' m</span>');
+      const wallLength = qSVG.measure({ x: pox, y: poy }, { x: x, y: y }) / 60;
+      const wallLengthDisplay = (typeof metersToFeetInches === 'function') ? 
+          metersToFeetInches(wallLength) : 
+          wallLength.toFixed(2) + ' m';
+      $('#boxinfo').html('Wall added <span style=\'font-size:0.6em\'>Moy. ' + wallLengthDisplay + '</span>');
       $('#line_construc').remove(); // DEL LINE CONSTRUC HELP TO VIEW NEW SEG PATH
       lengthTemp.remove();
       delete lengthTemp;

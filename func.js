@@ -31,7 +31,27 @@ try {
 grid = 20;
 showRib = true;
 showArea = true;
-meter = 160;
+var meter = 160;
+
+// Utility functions for converting meters to feet/inches display format
+function metersToFeetInches(meters) {
+    const totalInches = meters * 39.3701; // Convert meters to inches
+    const feet = Math.floor(totalInches / 12);
+    const inches = Math.round(totalInches % 12);
+    
+    if (feet > 0 && inches > 0) {
+        return `${feet}' ${inches}"`;
+    } else if (feet > 0) {
+        return `${feet}'`;
+    } else {
+        return `${inches}"`;
+    }
+}
+
+function metersToSquareFeet(squareMeters) {
+    const squareFeet = squareMeters * 10.7639; // Convert square meters to square feet
+    return Math.round(squareFeet) + ' sq ft';
+}
 grid_snap = 'off';
 colorbackground = "#ffffff";
 colorline = "#fff";
@@ -598,7 +618,11 @@ document.getElementById('report_mode').addEventListener("click", function () {
     mode = "report_mode";
     $('#panel').hide();
     $('#reportTools').show(200)
-    document.getElementById('reportTotalSurface').innerHTML = "Total surface : <b>" + (globalArea / 3600).toFixed(1) + "</b> m²";
+    const totalAreaInSquareMeters = globalArea / 3600;
+    const totalAreaDisplay = (typeof metersToSquareFeet === 'function') ? 
+        metersToSquareFeet(totalAreaInSquareMeters) : 
+        totalAreaInSquareMeters.toFixed(1) + " m²";
+    document.getElementById('reportTotalSurface').innerHTML = "Total surface : <b>" + totalAreaDisplay + "</b>";
     $('#reportTotalSurface').show(1000);
     document.getElementById('reportNumberSurface').innerHTML = "Number of rooms : <b>" + ROOM.length + "</b>";
     $('#reportNumberSurface').show(1000);
@@ -608,7 +632,11 @@ document.getElementById('report_mode').addEventListener("click", function () {
         let nameRoom = "Room n°" + number + " <small>(sans nom)</small>";
         if (ROOM[k].name != "") nameRoom = ROOM[k].name;
         reportRoom += '<div class="col-md-6"><p>' + nameRoom + '</p></div>\n';
-        reportRoom += '<div class="col-md-6"><p>Surface : <b>' + ((ROOM[k].area) / 3600).toFixed(2) + '</b> m²</p></div>\n';
+        const roomAreaInSquareMeters = (ROOM[k].area) / 3600;
+        const roomAreaDisplay = (typeof metersToSquareFeet === 'function') ? 
+            metersToSquareFeet(roomAreaInSquareMeters) : 
+            roomAreaInSquareMeters.toFixed(2) + " m²";
+        reportRoom += '<div class="col-md-6"><p>Surface : <b>' + roomAreaDisplay + '</b></p></div>\n';
         number++;
     }
     reportRoom += '</div><hr/>\n';
@@ -1840,11 +1868,17 @@ function inWallRib(wall, option = false) {
                     sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
                     sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
                     sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
-                    sizeText[n].textContent = valueText.toFixed(2);
-                    if (sizeText[n].textContent < 1) {
+                    const displayText = (typeof metersToFeetInches === 'function') ? 
+                        metersToFeetInches(valueText) : 
+                        valueText.toFixed(2);
+                    sizeText[n].textContent = displayText;
+                    
+                    // Adjust font size based on measurement value (not display text)
+                    if (valueText < 1) {
                         sizeText[n].setAttributeNS(null, 'font-size', '0.8em');
-                        sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
-                    } else sizeText[n].setAttributeNS(null, 'font-size', '1em');
+                    } else {
+                        sizeText[n].setAttributeNS(null, 'font-size', '1em');
+                    }
                     sizeText[n].setAttributeNS(null, 'stroke-width', '0.27px');
                     sizeText[n].setAttributeNS(null, 'fill', '#666666');
                     sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y) + ")");
@@ -2032,11 +2066,17 @@ function rib(shift = 5) {
                             sizeText[n].setAttributeNS(null, 'text-anchor', 'middle');
                             sizeText[n].setAttributeNS(null, 'font-family', 'roboto');
                             sizeText[n].setAttributeNS(null, 'stroke', '#ffffff');
-                            sizeText[n].textContent = valueText.toFixed(2);
-                            if (sizeText[n].textContent < 1) {
+                            const displayText = (typeof metersToFeetInches === 'function') ? 
+                                metersToFeetInches(valueText) : 
+                                valueText.toFixed(2);
+                            sizeText[n].textContent = displayText;
+                            
+                            // Adjust font size based on measurement value (not display text)
+                            if (valueText < 1) {
                                 sizeText[n].setAttributeNS(null, 'font-size', '0.73em');
-                                sizeText[n].textContent = sizeText[n].textContent.substring(1, sizeText[n].textContent.length);
-                            } else sizeText[n].setAttributeNS(null, 'font-size', '0.9em');
+                            } else {
+                                sizeText[n].setAttributeNS(null, 'font-size', '0.9em');
+                            }
                             sizeText[n].setAttributeNS(null, 'stroke-width', '0.2px');
                             sizeText[n].setAttributeNS(null, 'fill', '#555555');
                             sizeText[n].setAttribute("transform", "rotate(" + angleText + " " + startText.x + "," + (startText.y + shiftValue) + ")");

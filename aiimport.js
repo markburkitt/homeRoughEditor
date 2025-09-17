@@ -123,6 +123,9 @@ function importAIFloorplanJSONWithScaling(file, targetWidthM) {
                 // Calculate and apply scale factor
                 const scaleFactor = targetWidthM / currentWidthM;
                 scaleAllElementsUniformly(scaleFactor);
+                
+                // Update all door/window limit coordinates after scaling is applied
+                updateAllObjectLimits();
 
                 // Save state
                 if (typeof save === 'function') save();
@@ -217,6 +220,11 @@ function importAIWallsData(jsonData) {
         try {
             if (Array.isArray(jsonData.doors) || Array.isArray(jsonData.windows)) {
                 addOpeningsFromAI(jsonData);
+                
+                // Recalculate wall coordinates and object positions after placing doors/windows
+                editor.architect(WALLS);
+                // Reapply floorplan opacity after wall rebuild
+                if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
             }
         } catch (openErr) {
             console.warn('Opening placement warning:', openErr);
@@ -309,6 +317,11 @@ function importAIFloorplanJSON(file) {
                 try {
                     if (Array.isArray(jsonData.doors) || Array.isArray(jsonData.windows)) {
                         addOpeningsFromAI(jsonData);
+                        
+                        // Recalculate wall coordinates and object positions after placing doors/windows
+                        editor.architect(WALLS);
+                        // Reapply floorplan opacity after wall rebuild
+                        if (typeof applyFloorplanOpacity === 'function') applyFloorplanOpacity();
                     }
                 } catch (openErr) {
                     console.warn('Opening placement warning:', openErr);
@@ -574,4 +587,47 @@ function addOpeningsFromAI(jsonData) {
 
     // Refresh ribbons/indicators
     if (typeof rib === 'function') rib();
+}
+
+// Function to update all door/window limit coordinates after wall equations are recalculated
+function updateAllObjectLimits() {
+    if (typeof OBJDATA === 'undefined' || !Array.isArray(OBJDATA)) return;
+    
+    for (let i = 0; i < OBJDATA.length; i++) {
+        const obj = OBJDATA[i];
+        if (obj.family === 'inWall') {
+            // Find the wall this object is attached to
+            let attachedWall = null;
+            for (let j = 0; j < WALLS.length; j++) {
+                const wall = WALLS[j];
+                if (wall.equations && wall.equations.base) {
+                    const eq = wall.equations.base;
+                    const search = qSVG.nearPointOnEquation(eq, obj);
+                    if (search.distance < 0.1 && 
+                        qSVG.btwn(obj.x, wall.start.x, wall.end.x) && 
+                        qSVG.btwn(obj.y, wall.start.y, wall.end.y)) {
+                        attachedWall = wall;
+                        break;
+                    }
+                }
+            }
+            
+            // If we found the attached wall, recalculate the limit coordinates
+            if (attachedWall && typeof limitObj === 'function') {
+                try {
+                    const newLimits = limitObj(attachedWall.equations.base, obj.size, obj);
+                    if (Array.isArray(newLimits) && newLimits.length >= 2) {
+                        // Verify the new limits are still on the wall
+                        const onWall = (pt) => qSVG.btwn(pt.x, attachedWall.start.x, attachedWall.end.x) && 
+                                              qSVG.btwn(pt.y, attachedWall.start.y, attachedWall.end.y);
+                        if (onWall(newLimits[0]) && onWall(newLimits[1])) {
+                            obj.limit = newLimits;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to update object limits for object', i, e);
+                }
+            }
+        }
+    }
 }

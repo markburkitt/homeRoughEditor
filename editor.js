@@ -932,11 +932,14 @@ var editor = {
       }
 
       if (ROOM[rr].name != '') centroid.y = centroid.y + 20;
-      var area = ((ROOM[rr].area) / (meter * meter)).toFixed(2) + ' m²';
+      var areaInSquareMeters = (ROOM[rr].area) / (meter * meter);
+      var area = (typeof metersToSquareFeet === 'function') ? 
+          metersToSquareFeet(areaInSquareMeters) : 
+          areaInSquareMeters.toFixed(2) + ' m²';
       var styled = { color: '#343938', fontSize: '18px', fontWeight: 'normal' };
       if (ROOM[rr].surface != '') {
         styled.fontWeight = 'bold';
-        area = ROOM[rr].surface + ' m²';
+        area = ROOM[rr].surface + ' sq ft';
       }
       if (ROOM[rr].color == 'gradientBlack' || ROOM[rr].color == 'gradientBlue') styled.color = 'white';
       if (ROOM[rr].showSurface) qSVG.textOnDiv(area, centroid, styled, 'boxArea');
@@ -946,7 +949,11 @@ var editor = {
       $('#areaValue').html('');
     }
     else {
-      $('#areaValue').html('<i class="fa fa-map-o" aria-hidden="true"></i> ' + (globalArea / 3600).toFixed(1) + ' m²');
+      const globalAreaInSquareMeters = globalArea / 3600;
+      const globalAreaDisplay = (typeof metersToSquareFeet === 'function') ? 
+          metersToSquareFeet(globalAreaInSquareMeters) : 
+          globalAreaInSquareMeters.toFixed(1) + ' m²';
+      $('#areaValue').html('<i class="fa fa-map-o" aria-hidden="true"></i> ' + globalAreaDisplay);
     }
   },
 
@@ -1037,8 +1044,14 @@ var editor = {
       var width = maxX - minX;
       var height = maxY - minY;
 
-      var labelWidth = ((maxX - minX) / meter).toFixed(2);
-      var labelHeight = ((maxY - minY) / meter).toFixed(2);
+      var widthInMeters = (maxX - minX) / meter;
+      var heightInMeters = (maxY - minY) / meter;
+      var labelWidth = (typeof metersToFeetInches === 'function') ? 
+          metersToFeetInches(widthInMeters) : 
+          widthInMeters.toFixed(2);
+      var labelHeight = (typeof metersToFeetInches === 'function') ? 
+          metersToFeetInches(heightInMeters) : 
+          heightInMeters.toFixed(2);
 
       var sideRight = 'm' + (maxX + 40) + ',' + minY;
       sideRight = sideRight + ' l60,0 m-40,10 l10,-10 l10,10 m-10,-10';
@@ -1068,7 +1081,7 @@ var editor = {
       text.setAttributeNS(null, 'y', ((maxY + minY) / 2) + 35);
       text.setAttributeNS(null, 'fill', '#555');
       text.setAttributeNS(null, 'text-anchor', 'middle');
-      text.textContent = labelHeight + ' m';
+      text.textContent = labelHeight;
       text.setAttribute("transform", "rotate(270 " + (maxX + 70) + "," + (maxY + minY) / 2 + ")");
       $('#boxScale').append(text);
 
@@ -1077,7 +1090,7 @@ var editor = {
       text.setAttributeNS(null, 'y', (minY - 95));
       text.setAttributeNS(null, 'fill', '#555');
       text.setAttributeNS(null, 'text-anchor', 'middle');
-      text.textContent = labelWidth + ' m';
+      text.textContent = labelWidth;
       $('#boxScale').append(text);
 
     }
