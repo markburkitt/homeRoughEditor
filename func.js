@@ -2792,14 +2792,15 @@ document.getElementById('import_image_mode').addEventListener('click', function(
 (function(){
     const jsonInput = document.getElementById('combined_json_input');
     const imageInput = document.getElementById('combined_image_input');
-    const widthInput = document.getElementById('combined_target_width');
+    const feetInput = document.getElementById('combined_target_feet');
+    const inchesInput = document.getElementById('combined_target_inches');
     const importBtn = document.getElementById('combined_import_btn');
     const jsonName = document.getElementById('combined_json_name');
     const imageName = document.getElementById('combined_image_name');
     const errMsg = document.getElementById('combined_error_msg');
     const okMsg = document.getElementById('combined_success_msg');
 
-    if (!(jsonInput && imageInput && importBtn && widthInput)) return; // Modal not present
+    if (!(jsonInput && imageInput && importBtn && feetInput && inchesInput)) return; // Modal not present
 
     function resetMessages() {
         if (errMsg) errMsg.textContent = '';
@@ -2809,7 +2810,8 @@ document.getElementById('import_image_mode').addEventListener('click', function(
     function validateEnable() {
         const jf = jsonInput.files && jsonInput.files[0];
         const imf = imageInput.files && imageInput.files[0];
-        const targetWidth = parseFloat(widthInput.value);
+        const feet = parseFloat(feetInput.value) || 0;
+        const inches = parseFloat(inchesInput.value) || 0;
         let ok = true;
         resetMessages();
         if (jf) {
@@ -2821,10 +2823,15 @@ document.getElementById('import_image_mode').addEventListener('click', function(
             const validImg = /\.(png|jpe?g)$/i.test(imf.name);
             if (!validImg) { ok = false; if (errMsg) errMsg.textContent = 'Selected image must be PNG or JPG'; }
         }
-        // Width is required and must be positive
-        if (!targetWidth || targetWidth <= 0) {
+        // Width is required - need at least some feet or inches
+        if (feet <= 0 && inches <= 0) {
             ok = false;
-            if (errMsg && !errMsg.textContent) errMsg.textContent = 'Please specify a valid target width';
+            if (errMsg && !errMsg.textContent) errMsg.textContent = 'Please specify a valid width in feet and/or inches';
+        }
+        // Validate inches range
+        if (inches < 0 || inches >= 12) {
+            ok = false;
+            if (errMsg && !errMsg.textContent) errMsg.textContent = 'Inches must be between 0 and 11';
         }
         importBtn.disabled = !ok;
     }
@@ -2837,7 +2844,8 @@ document.getElementById('import_image_mode').addEventListener('click', function(
         if (imageName) imageName.textContent = this.files[0] ? this.files[0].name : '';
         validateEnable();
     });
-    widthInput.addEventListener('input', validateEnable);
+    feetInput.addEventListener('input', validateEnable);
+    inchesInput.addEventListener('input', validateEnable);
 
     importBtn.addEventListener('click', async function(){
         resetMessages();
@@ -2854,7 +2862,10 @@ document.getElementById('import_image_mode').addEventListener('click', function(
 
         const jf = jsonInput.files[0];
         const imf = imageInput.files[0];
-        const targetWidth = parseFloat(widthInput.value);
+        const feet = parseFloat(feetInput.value) || 0;
+        const inches = parseFloat(inchesInput.value) || 0;
+        // Convert feet and inches to meters (1 foot = 0.3048 meters, 1 inch = 0.0254 meters)
+        const targetWidth = (feet * 0.3048) + (inches * 0.0254);
         importBtn.disabled = true;
         importBtn.textContent = 'Importing...';
 
@@ -2930,9 +2941,13 @@ document.getElementById('import_image_mode').addEventListener('click', function(
                 }, 200);
             }
 
+            // Format the width display string
+            const widthDisplay = feet > 0 && inches > 0 ? `${feet}' ${inches}"` : 
+                                feet > 0 ? `${feet}'` : `${inches}"`;
+            
             if (okMsg) okMsg.textContent = imf ? 
-                `Imported and scaled to ${targetWidth}m width successfully!` : 
-                `Floorplan JSON imported and scaled to ${targetWidth}m width successfully.`;
+                `Imported and scaled to ${widthDisplay} width successfully!` : 
+                `Floorplan JSON imported and scaled to ${widthDisplay} width successfully.`;
             if (typeof $ !== 'undefined') $('#boxinfo').html(imf ? 
                 'Floorplan and image imported and scaled successfully' : 
                 'Floorplan JSON imported and scaled successfully');
@@ -2946,7 +2961,8 @@ document.getElementById('import_image_mode').addEventListener('click', function(
                 }
                 jsonInput.value = '';
                 imageInput.value = '';
-                widthInput.value = '';
+                feetInput.value = '';
+                inchesInput.value = '';
                 if (jsonName) jsonName.textContent = '';
                 if (imageName) imageName.textContent = '';
                 importBtn.textContent = 'Import';
