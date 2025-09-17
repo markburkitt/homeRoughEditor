@@ -464,13 +464,33 @@ function _MOUSEMOVE(event) {
 
     var objTarget = false;
     for (var i = 0; i < OBJDATA.length; i++) {
+      // Validate object coordinates before attempting detection
+      if (!OBJDATA[i] || typeof OBJDATA[i].x !== 'number' || typeof OBJDATA[i].y !== 'number' || 
+          isNaN(OBJDATA[i].x) || isNaN(OBJDATA[i].y)) {
+        continue; // Skip objects with invalid coordinates
+      }
+      
       var objX1 = OBJDATA[i].bbox.left;
       var objX2 = OBJDATA[i].bbox.right;
       var objY1 = OBJDATA[i].bbox.top;
       var objY2 = OBJDATA[i].bbox.bottom;
       var realBboxCoords = OBJDATA[i].realBbox;
-      if (qSVG.rayCasting(snap, realBboxCoords)) {
-        objTarget = OBJDATA[i];
+      
+      // Validate realBbox coordinates before ray casting
+      if (realBboxCoords && realBboxCoords.length === 4) {
+        var validRealBbox = true;
+        for (var j = 0; j < 4; j++) {
+          if (!realBboxCoords[j] || typeof realBboxCoords[j].x !== 'number' || 
+              typeof realBboxCoords[j].y !== 'number' || 
+              isNaN(realBboxCoords[j].x) || isNaN(realBboxCoords[j].y)) {
+            validRealBbox = false;
+            break;
+          }
+        }
+        
+        if (validRealBbox && qSVG.rayCasting(snap, realBboxCoords)) {
+          objTarget = OBJDATA[i];
+        }
       }
     }
     if (objTarget !== false) {
@@ -1109,6 +1129,36 @@ function _MOUSEMOVE(event) {
       for (var objIdx = 0; objIdx < OBJDATA.length; objIdx++) {
         var obj = OBJDATA[objIdx];
         if (obj && obj.graph && obj.family === 'inWall') {
+          // Validate and fix coordinates before re-appending
+          if (typeof obj.x !== 'number' || typeof obj.y !== 'number' || 
+              isNaN(obj.x) || isNaN(obj.y)) {
+            // Try to find the wall this object should be attached to and fix coordinates
+            var attachedWall = null;
+            var bestDistance = Infinity;
+            var bestPosition = null;
+            
+            for (var wallIdx in WALLS) {
+              var wall = WALLS[wallIdx];
+              var eq = qSVG.createEquation(wall.start.x, wall.start.y, wall.end.x, wall.end.y);
+              // Use a fallback position if obj coordinates are invalid
+              var testPos = { x: obj.x || 0, y: obj.y || 0 };
+              var nearPoint = qSVG.nearPointOnEquation(eq, testPos);
+              
+              if (nearPoint.distance < bestDistance && qSVG.btwn(nearPoint.x, wall.start.x, wall.end.x) && qSVG.btwn(nearPoint.y, wall.start.y, wall.end.y)) {
+                bestDistance = nearPoint.distance;
+                attachedWall = wall;
+                bestPosition = { x: nearPoint.x, y: nearPoint.y };
+              }
+            }
+            
+            // Fix coordinates if we found a suitable wall
+            if (attachedWall && bestPosition && bestDistance < 100) {
+              obj.x = bestPosition.x;
+              obj.y = bestPosition.y;
+              obj.update();
+            }
+          }
+          
           obj.graph.remove();
           $('#boxcarpentry').append(obj.graph);
         }
@@ -1230,6 +1280,11 @@ function _MOUSEMOVE(event) {
                 obj.limit = limits;
                 obj.update();
                 
+                // Force realBbox recalculation to ensure proper selection after re-attachment
+                if (obj.update && typeof obj.update === 'function') {
+                  obj.update();
+                }
+                
                 // Re-append to maintain proper layering
                 if (obj.graph) {
                   obj.graph.remove();
@@ -1242,6 +1297,11 @@ function _MOUSEMOVE(event) {
             } else {
               // No suitable wall found, mark for removal
               objectsToRemove.push(objIdx);
+            }
+          } else {
+            // Even if attached, ensure realBbox is properly calculated
+            if (obj.update && typeof obj.update === 'function') {
+              obj.update();
             }
           }
         }
